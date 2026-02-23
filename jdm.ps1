@@ -1,11 +1,11 @@
-# myTool - install.ps1
+# jdm - install.ps1
 # One-time setup script
 # Usage: .\install.ps1 (from inside the repo folder)
 
 $ErrorActionPreference = "Stop"
 
-$TOOL_NAME = "myTool"
-$TOOL_DIR = "$env:USERPROFILE\.myTool"
+$TOOL_NAME = "jdm"
+$TOOL_DIR = "$env:USERPROFILE\.jdm"
 $MODULE_DIR = "$TOOL_DIR\module"
 $REGISTRY = "$TOOL_DIR\registry.json"
 $SYMLINK_DIR = "$TOOL_DIR\candidates\java"
@@ -82,7 +82,7 @@ function Copy-ModuleFiles {
 
     if (-not (Test-Path $MODULE_SRC)) {
         Write-Fail "Module source not found at $MODULE_SRC"
-        Write-Fail "Make sure you are running install.ps1 from inside the myTool repo folder."
+        Write-Fail "Make sure you are running install.ps1 from inside the jdm repo folder."
         exit 1
     }
 
@@ -91,11 +91,11 @@ function Copy-ModuleFiles {
 }
 
 function Add-ToUserPath {
-    Write-Step "Adding myTool to user PATH..."
+    Write-Step "Adding jdm to user PATH..."
 
     $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
 
-    if ($currentPath -notlike "*myTool*") {
+    if ($currentPath -notlike "*jdm*") {
         [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$MODULE_DIR", "User")
         Write-Ok "Added $MODULE_DIR to PATH"
     }
@@ -126,7 +126,7 @@ function Set-JavaEnvironment {
         $_ -notmatch "temurin" -and
         $_ -notmatch "corretto" -and
         $_ -notmatch "zulu" -and
-        $_ -notmatch "\.myTool\\candidates" -and
+        $_ -notmatch "\.jdm\\candidates" -and
         $_ -ne ""
     }
 
@@ -137,16 +137,16 @@ function Set-JavaEnvironment {
 }
 
 function New-Launcher {
-    Write-Step "Creating myTool launcher..."
+    Write-Step "Creating jdm launcher..."
 
-    $launcher = "@echo off`npowershell.exe -File `"%USERPROFILE%\.myTool\module\myTool.ps1`" %*"
-    Set-Content "$MODULE_DIR\myTool.cmd" $launcher
+    $launcher = "@echo off`npowershell.exe -File `"%USERPROFILE%\.jdm\module\jdm.ps1`" %*"
+    Set-Content "$MODULE_DIR\jdm.cmd" $launcher
 
     Write-Ok "Launcher created"
 }
 
 # ── Main ──────────────────────────────────────────────────────
-Write-Title "Installing myTool - Java Version Manager for Windows"
+Write-Title "Installing jdm - Java Version Manager for Windows"
 Write-Host ""
 
 # Check admin
@@ -173,9 +173,9 @@ New-Launcher
 Add-ToUserPath
 Set-JavaEnvironment
 
-Write-Title "myTool installed successfully!"
+Write-Title "jdm installed successfully!"
 Write-Host ""
 Write-Host "  Open a new terminal and run:" -ForegroundColor White
-Write-Host "  myTool help" -ForegroundColor Cyan
-Write-Host "  myTool install temurin.21" -ForegroundColor Cyan
+Write-Host "  jdm help" -ForegroundColor Cyan
+Write-Host "  jdm install temurin.21" -ForegroundColor Cyan
 Write-Host ""
