@@ -68,11 +68,12 @@ function Invoke-Install {
         return
     }
 
-    # Step 6: Build install path
+    # Step 6: Run winget install
+    # Pass a dummy target path - winget will install to Program Files
+    # but we will find the real path afterwards
     $installBase = "$env:USERPROFILE\.jdks\$key"
-
-    # Step 7: Run winget install
     Write-Host ""
+
     $success = Install-WithWinget -Id $selected.Id -TargetPath $installBase
 
     if (-not $success) {
@@ -80,21 +81,20 @@ function Invoke-Install {
         return
     }
 
-    # Step 8: Find the actual JDK root (vendor may add subfolders)
-    Write-Step "Locating java.exe..."
-    $javaExe = Get-ChildItem -Path $installBase -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-
-    if (-not $javaExe) {
-        Write-Fail "Could not find java.exe inside $installBase"
-        Write-Fail "The JDK may not have installed correctly."
+    # Step 7: Read the real install path from the marker file
+    $markerFile = "$env:USERPROFILE\.jdm\tmp\last_install_path.txt"
+    if (-not (Test-Path $markerFile)) {
+        Write-Fail "Could not determine install path."
         return
     }
 
-    # The real JDK root is the parent of the bin folder
-    $realPath = $javaExe.Directory.Parent.FullName
-    Write-Ok "Found JDK root at: $realPath"
+    $realPath = Get-Content $markerFile -Raw
+    $realPath = $realPath.Trim()
+    Remove-Item $markerFile -Force -ErrorAction SilentlyContinue
 
-    # Step 9: Update registry with real path
+    Write-Ok "JDK installed at: $realPath"
+
+    # Step 8: Update registry with real path
     $vendor = Get-VendorFromId  -Id $selected.Id
     $version = Get-VersionFromId -Id $selected.Id
 
@@ -110,7 +110,7 @@ function Invoke-Install {
         return
     }
 
-    # Step 10: Update symlink if this should be current
+    # Step 9: Update symlink
     $current = Get-CurrentVersion
     $shouldSwitch = $false
 

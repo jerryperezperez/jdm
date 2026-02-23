@@ -6,7 +6,7 @@ function Search-Winget {
         [Parameter(Mandatory)] [string] $Query
     )
 
-    Write-Step "Searching winget for '$Query'..."
+    Write-Step "Searching for '$Query'..."
 
     $env:WINGET_DISABLE_PROGRESS_BAR = "1"
     $raw = winget search $Query --source winget --accept-source-agreements 2>&1
@@ -32,7 +32,6 @@ function Search-Winget {
 
         if (-not $parsing) { continue }
 
-        # Extract Id using regex - matches patterns like EclipseAdoptium.Temurin.21.JDK
         if ($trimmed -match "([\w]+\.[\w]+\.[\w.]+)") {
             $id = $matches[1].Trim()
             $name = $trimmed -replace "\s+$id.*", "" | ForEach-Object { $_.Trim() }
@@ -58,7 +57,6 @@ function Filter-JDK {
 
 function Build-Query {
     param([string] $UserQuery)
-    # Dots work fine with winget, convert dashes to dots
     $query = $UserQuery -replace "-", "."
     return $query.Trim()
 }
@@ -102,34 +100,76 @@ function Get-RegistryKey {
     return "$vendor-$version"
 }
 
+# ── Snapshot all java.exe paths currently on disk ────────────
+function Get-JavaSnapshot {
+    $searchRoots = @(
+        "$env:ProgramFiles",
+        "${env:ProgramFiles(x86)}",
+        "$env:LOCALAPPDATA",
+        "$env:APPDATA"
+    )
+
+    $snapshot = @{}
+
+    foreach ($root in $searchRoots) {
+        if (-not (Test-Path $root)) { continue }
+
+        $hits = Get-ChildItem -Path $root -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue
+        foreach ($hit in $hits) {
+            $jdkRoot = $hit.Directory.Parent.FullName
+            $snapshot[$jdkRoot] = $true
+        }
+    }
+
+    return $snapshot
+}
+
 function Install-WithWinget {
     param(
         [Parameter(Mandatory)] [string] $Id,
         [Parameter(Mandatory)] [string] $TargetPath
     )
 
-    Write-Step "Downloading and installing $Id..."
-    Write-Step "Target path: $TargetPath"
+    Write-Step "Installing $Id via winget..."
 
-    if (-not (Test-Path $TargetPath)) {
-        New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
-    }
+    # Snapshot existing java installations BEFORE install
+    Write-Step "Scanning existing Java installations..."
+    $before = Get-JavaSnapshot
 
-    # Run winget directly without capturing output
-    # so the user sees download progress
+    # Install without --location since MSI installers ignore it
     winget install $Id `
-        --location $TargetPath `
         --source winget `
         --accept-package-agreements `
         --accept-source-agreements `
         --silent
 
-    if ($LASTEXITCODE -eq 0) {
-        Write-Ok "Winget install completed"
-        return $true
-    }
-    else {
+    if ($LASTEXITCODE -ne 0) {
         Write-Fail "winget install failed with exit code $LASTEXITCODE"
         return $false
     }
+
+    Write-Ok "Winget install completed"
+
+    # Snapshot AFTER install and find what's new
+    Write-Step "Detecting new installation..."
+    $after = Get-JavaSnapshot
+
+    $newPaths = $after.Keys | Where-Object { -not $before.ContainsKey($_) }
+
+    if ($newPaths.Count -eq 0) {
+        Write-Fail "Could not detect new JDK installation. It may already be installed."
+        return $false
+    }
+
+    $realPath = $newPaths | Select-Object -First 1
+    Write-Ok "Detected new JDK at: $realPath"
+
+    # Write real path to marker file for install.ps1 to read
+    $tmpDir = "$env:USERPROFILE\.jdm\tmp"
+    if (-not (Test-Path $tmpDir)) {
+        New-Item -ItemType Directory $tmpDir -Force | Out-Null
+    }
+    Set-Content "$tmpDir\last_install_path.txt" $realPath
+
+    return $true
 }

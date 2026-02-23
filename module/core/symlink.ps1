@@ -3,6 +3,7 @@
 
 $JAVA_CANDIDATES = "$env:USERPROFILE\.jdm\candidates\java"
 $CURRENT_LINK = "$JAVA_CANDIDATES\current"
+$JDM_JAVA_BIN = "$CURRENT_LINK\bin"
 
 function Test-SymlinkCapability {
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
@@ -67,26 +68,66 @@ function Get-CurrentSymlinkTarget {
     return $null
 }
 
-function Set-JavaHome {
-    Write-Step "Setting JAVA_HOME..."
-    [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT_LINK, "User")
-    $env:JAVA_HOME = $CURRENT_LINK
-    Write-Ok "JAVA_HOME set to $CURRENT_LINK"
-}
+# ── Clean all hardcoded java paths from Machine and User PATH ─
+# Then put jdm symlink bin first so it always wins
+function Repair-JavaPath {
 
-function Add-JavaToPath {
-    Write-Step "Adding Java to PATH..."
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator
+    )
 
-    $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-    $javaEntry = "%JAVA_HOME%\bin"
+    # Always fix User PATH
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    $userCleaned = $userPath -split ";" | Where-Object {
+        $_ -notmatch "java" -and
+        $_ -notmatch "jdk" -and
+        $_ -notmatch "temurin" -and
+        $_ -notmatch "corretto" -and
+        $_ -notmatch "adoptium" -and
+        $_ -notmatch "zulu" -and
+        $_ -notmatch "jdm\\candidates" -and
+        $_ -ne ""
+    }
+    # Add jdm bin to user PATH
+    $newUserPath = $JDM_JAVA_BIN + ";" + ($userCleaned -join ";")
+    [Environment]::SetEnvironmentVariable("PATH", $newUserPath, "User")
+    Write-Ok "User PATH updated"
 
-    if ($currentPath -notlike "*JAVA_HOME*") {
-        [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$javaEntry", "User")
-        Write-Ok "Added %JAVA_HOME%\bin to PATH"
+    # Fix Machine PATH only if admin
+    if ($isAdmin) {
+        $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $machineCleaned = $machinePath -split ";" | Where-Object {
+            $_ -notmatch "java" -and
+            $_ -notmatch "jdk" -and
+            $_ -notmatch "temurin" -and
+            $_ -notmatch "corretto" -and
+            $_ -notmatch "adoptium" -and
+            $_ -notmatch "zulu" -and
+            $_ -notmatch "jdm\\candidates" -and
+            $_ -ne ""
+        }
+        $newMachinePath = $JDM_JAVA_BIN + ";" + ($machineCleaned -join ";")
+        [Environment]::SetEnvironmentVariable("PATH", $newMachinePath, "Machine")
+        Write-Ok "Machine PATH updated"
     }
     else {
-        Write-Ok "%JAVA_HOME%\bin already in PATH, skipping"
+        Write-Step "Not running as Admin - Machine PATH not cleaned"
+        Write-Step "Run 'jdm repair' as Administrator to fully clean Machine PATH"
     }
+}
+
+function Set-JavaHome {
+    [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT_LINK, "User")
+    $env:JAVA_HOME = $CURRENT_LINK
+
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator
+    )
+    if ($isAdmin) {
+        [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT_LINK, "Machine")
+    }
+
+    Write-Ok "JAVA_HOME set to $CURRENT_LINK"
 }
 
 function Switch-Version {
@@ -96,19 +137,28 @@ function Switch-Version {
 
     Write-Step "Switching Java version..."
 
+    # Update symlink
     $success = Set-CurrentSymlink -TargetPath $TargetPath
 
-    if ($success) {
-        $javaBin = "$TargetPath\bin\java.exe"
-        if (Test-Path $javaBin) {
-            Write-Ok "Verified: java.exe found at $javaBin"
-        }
-        else {
-            Write-Fail "Warning: java.exe not found at $javaBin - install may be incomplete"
-        }
+    if (-not $success) { return $false }
+
+    # Verify java.exe exists
+    $javaBin = "$TargetPath\bin\java.exe"
+    if (Test-Path $javaBin) {
+        Write-Ok "Verified: java.exe found"
+    }
+    else {
+        Write-Fail "Warning: java.exe not found at $javaBin - install may be incomplete"
     }
 
-    return $success
+    # Clean PATH so jdm symlink always wins
+    Write-Step "Updating PATH..."
+    Repair-JavaPath
+
+    # Ensure JAVA_HOME points to symlink
+    Set-JavaHome
+
+    return $true
 }
 
 function Remove-CurrentSymlink {
@@ -119,8 +169,8 @@ function Remove-CurrentSymlink {
 }
 
 function Initialize-JavaEnvironment {
-    Write-Step "Configuring Java environment variables..."
+    Write-Step "Configuring Java environment..."
     Set-JavaHome
-    Add-JavaToPath
+    Repair-JavaPath
     Write-Ok "Environment configured. Restart your terminal for changes to take effect."
 }
