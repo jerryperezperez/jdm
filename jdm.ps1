@@ -1,165 +1,181 @@
-# jdm - CLI entry point and command router
+# myTool - install.ps1
+# One-time setup script
+# Usage: .\install.ps1 (from inside the repo folder)
 
-. "$PSScriptRoot\commands\install.ps1"
-. "$PSScriptRoot\commands\use.ps1"
-. "$PSScriptRoot\commands\list.ps1"
-. "$PSScriptRoot\commands\uninstall.ps1"
+$ErrorActionPreference = "Stop"
+
+$TOOL_NAME = "myTool"
+$TOOL_DIR = "$env:USERPROFILE\.myTool"
+$MODULE_DIR = "$TOOL_DIR\module"
+$REGISTRY = "$TOOL_DIR\registry.json"
+$SYMLINK_DIR = "$TOOL_DIR\candidates\java"
+$CURRENT = "$SYMLINK_DIR\current"
+$JAVA_BIN = "$CURRENT\bin"
+$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
+$MODULE_SRC = "$SCRIPT_DIR\module"
 
 function Write-Step { param($msg) Write-Host "  --> $msg" -ForegroundColor Cyan }
 function Write-Ok { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Green }
 function Write-Fail { param($msg) Write-Host "  [ERROR] $msg" -ForegroundColor Red }
 function Write-Title { param($msg) Write-Host "`n$msg" -ForegroundColor Yellow }
 
-$jdm_VERSION = "0.1.0"
-
-function Show-Help {
-    Write-Host ""
-    Write-Host "  jdm v$jdm_VERSION - Java Version Manager for Windows" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  Usage:" -ForegroundColor White
-    Write-Host "    jdm COMMAND [arguments]" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "  Commands:" -ForegroundColor White
-    Write-Host "    install VENDOR.VERSION   Install a JDK version" -ForegroundColor Gray
-    Write-Host "    use     VENDOR-VERSION   Switch active Java version" -ForegroundColor Gray
-    Write-Host "    list                     List installed versions" -ForegroundColor Gray
-    Write-Host "    uninstall VENDOR-VERSION Remove an installed JDK version" -ForegroundColor Gray
-    Write-Host "    uninstall --self         Remove jdm from this machine" -ForegroundColor Gray
-    Write-Host "    version                  Show jdm version" -ForegroundColor Gray
-    Write-Host "    help                     Show this help message" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "  Examples:" -ForegroundColor White
-    Write-Host "    jdm install temurin.21" -ForegroundColor Cyan
-    Write-Host "    jdm install corretto.17" -ForegroundColor Cyan
-    Write-Host "    jdm use temurin-21" -ForegroundColor Cyan
-    Write-Host "    jdm list" -ForegroundColor Cyan
-    Write-Host "    jdm uninstall corretto-17" -ForegroundColor Cyan
-    Write-Host "    jdm uninstall --self" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  Supported vendors:" -ForegroundColor White
-    Write-Host "    temurin    Eclipse Temurin (Adoptium)" -ForegroundColor Gray
-    Write-Host "    corretto   Amazon Corretto" -ForegroundColor Gray
-    Write-Host "    azul       Azul Zulu" -ForegroundColor Gray
-    Write-Host "    microsoft  Microsoft OpenJDK" -ForegroundColor Gray
-    Write-Host ""
+function Test-Admin {
+    $current = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function Invoke-SelfUninstall {
-    Write-Host ""
-    Write-Host "  This will remove jdm and all its files from your machine." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  The following will be removed:" -ForegroundColor White
-    Write-Host "    - $env:USERPROFILE\.jdm\" -ForegroundColor Gray
-    Write-Host "    - jdm from user PATH" -ForegroundColor Gray
-    Write-Host "    - JAVA_HOME (user level)" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "  The following will NOT be removed:" -ForegroundColor White
-    Write-Host "    - Your JDKs in $env:USERPROFILE\.jdks\" -ForegroundColor Gray
-    Write-Host "    - Machine level PATH entries (requires manual Admin cleanup)" -ForegroundColor Gray
-    Write-Host ""
+function Test-Winget {
+    try {
+        $null = Get-Command winget -ErrorAction Stop
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
 
-    $confirm = Read-Host "  Are you sure you want to uninstall jdm? (y/n)"
-    if ($confirm -ne "y") {
-        Write-Step "Uninstall cancelled."
-        return
+function Initialize-Folders {
+    Write-Step "Creating folder structure..."
+
+    $folders = @(
+        $TOOL_DIR,
+        "$TOOL_DIR\candidates",
+        "$TOOL_DIR\candidates\java",
+        "$TOOL_DIR\tmp",
+        $MODULE_DIR,
+        "$MODULE_DIR\commands",
+        "$MODULE_DIR\core"
+    )
+
+    foreach ($folder in $folders) {
+        if (-not (Test-Path $folder)) {
+            New-Item -ItemType Directory -Path $folder -Force | Out-Null
+        }
     }
 
-    # Step 1: Remove from user PATH
-    Write-Step "Removing jdm from PATH..."
+    Write-Ok "Folders created at $TOOL_DIR"
+}
+
+function Initialize-Registry {
+    Write-Step "Initializing registry..."
+
+    if (-not (Test-Path $REGISTRY)) {
+        $empty = @{
+            candidates = @{
+                java = @{
+                    current   = $null
+                    installed = @()
+                    versions  = @{}
+                }
+            }
+        }
+        $empty | ConvertTo-Json -Depth 10 | Set-Content $REGISTRY
+        Write-Ok "Registry created"
+    }
+    else {
+        Write-Ok "Registry already exists, skipping"
+    }
+}
+
+function Copy-ModuleFiles {
+    Write-Step "Copying module files..."
+
+    if (-not (Test-Path $MODULE_SRC)) {
+        Write-Fail "Module source not found at $MODULE_SRC"
+        Write-Fail "Make sure you are running install.ps1 from inside the myTool repo folder."
+        exit 1
+    }
+
+    Copy-Item "$MODULE_SRC\*" $MODULE_DIR -Recurse -Force
+    Write-Ok "Module files copied to $MODULE_DIR"
+}
+
+function Add-ToUserPath {
+    Write-Step "Adding myTool to user PATH..."
+
     $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-    $cleaned = $currentPath -split ";" | Where-Object { $_ -notmatch "jdm" -and $_ -ne "" }
-    [Environment]::SetEnvironmentVariable("PATH", $cleaned -join ";", "User")
-    Write-Ok "Removed from PATH"
 
-    # Step 2: Remove JAVA_HOME user level
-    Write-Step "Removing JAVA_HOME..."
-    [Environment]::SetEnvironmentVariable("JAVA_HOME", $null, "User")
-    Write-Ok "Removed JAVA_HOME"
+    if ($currentPath -notlike "*myTool*") {
+        [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$MODULE_DIR", "User")
+        Write-Ok "Added $MODULE_DIR to PATH"
+    }
+    else {
+        Write-Ok "Already in PATH, skipping"
+    }
+}
 
-    # Step 3: Remove .jdm folder
-    Write-Step "Removing jdm files..."
-    Remove-Item "$env:USERPROFILE\.jdm" -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Ok "Removed $env:USERPROFILE\.jdm"
+function Set-JavaEnvironment {
+    Write-Step "Setting JAVA_HOME..."
 
-    # Step 4: Warn about machine level cleanup
+    # User level
+    [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT, "User")
+
+    # Machine level (we are admin so this works)
+    [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT, "Machine")
+
+    Write-Ok "JAVA_HOME set to $CURRENT"
+
+    # Add java\current\bin to Machine PATH
+    Write-Step "Adding java to Machine PATH..."
+
     $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
-    $hasJava = $machinePath -split ";" | Where-Object { $_ -match "jdk|java|temurin|corretto|zulu|jdm" }
 
-    Write-Host ""
-    Write-Ok "jdm has been uninstalled!"
-    Write-Host ""
-
-    if ($hasJava) {
-        Write-Host "  [!] Warning: your Machine level PATH still has Java entries:" -ForegroundColor Yellow
-        $hasJava | ForEach-Object { Write-Host "      $_" -ForegroundColor Gray }
-        Write-Host ""
-        Write-Host "  To clean these up run PowerShell as Administrator and remove them manually." -ForegroundColor Gray
-        Write-Host ""
+    # Remove any old hardcoded java paths first
+    $cleaned = $machinePath -split ";" | Where-Object {
+        $_ -notmatch "jdk" -and
+        $_ -notmatch "temurin" -and
+        $_ -notmatch "corretto" -and
+        $_ -notmatch "zulu" -and
+        $_ -notmatch "\.myTool\\candidates" -and
+        $_ -ne ""
     }
 
-    Write-Host "  Your JDKs are still in $env:USERPROFILE\.jdks\" -ForegroundColor Gray
-    Write-Host "  Delete that folder manually if you want to remove them too." -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "  Open a new terminal for changes to take effect." -ForegroundColor Cyan
-    Write-Host ""
+    # Add our symlink bin path
+    $newPath = ($cleaned -join ";") + ";$JAVA_BIN"
+    [Environment]::SetEnvironmentVariable("PATH", $newPath, "Machine")
+    Write-Ok "Added $JAVA_BIN to Machine PATH"
 }
 
-# Command router
-$command = $args[0]
-$rest = $args[1..($args.Length - 1)]
+function New-Launcher {
+    Write-Step "Creating myTool launcher..."
 
-switch ($command) {
+    $launcher = "@echo off`npowershell.exe -File `"%USERPROFILE%\.myTool\module\myTool.ps1`" %*"
+    Set-Content "$MODULE_DIR\myTool.cmd" $launcher
 
-    "install" {
-        if (-not $rest[0]) {
-            Write-Fail "Usage: jdm install VENDOR.VERSION"
-            Write-Host "  Example: jdm install temurin.21" -ForegroundColor Cyan
-        }
-        else {
-            Invoke-Install -UserInput $rest[0]
-        }
-    }
-
-    "use" {
-        if (-not $rest[0]) {
-            Write-Fail "Usage: jdm use VENDOR-VERSION"
-            Write-Host "  Example: jdm use temurin-21" -ForegroundColor Cyan
-        }
-        else {
-            Invoke-Use -Key $rest[0]
-        }
-    }
-
-    "list" {
-        Invoke-List
-    }
-
-    "uninstall" {
-        if (-not $rest[0]) {
-            Write-Fail "Usage: jdm uninstall VENDOR-VERSION"
-            Write-Host "  Example: jdm uninstall temurin-21" -ForegroundColor Cyan
-        }
-        elseif ($rest[0] -eq "--self") {
-            Invoke-SelfUninstall
-        }
-        else {
-            Invoke-Uninstall -Key $rest[0]
-        }
-    }
-
-    "version" {
-        Write-Host ""
-        Write-Host "  jdm v$jdm_VERSION" -ForegroundColor Cyan
-        Write-Host ""
-    }
-
-    { $_ -in "help", "--help", "-h", "" } {
-        Show-Help
-    }
-
-    default {
-        Write-Host ""
-        Write-Fail "Unknown command: '$command'"
-        Show-Help
-    }
+    Write-Ok "Launcher created"
 }
+
+# ── Main ──────────────────────────────────────────────────────
+Write-Title "Installing myTool - Java Version Manager for Windows"
+Write-Host ""
+
+# Check admin
+if (-not (Test-Admin)) {
+    Write-Fail "Please run this script as Administrator."
+    Write-Fail "Right-click PowerShell and select Run as Administrator."
+    exit 1
+}
+
+# Check winget
+if (-not (Test-Winget)) {
+    Write-Fail "winget not found. Install App Installer from the Microsoft Store."
+    exit 1
+}
+
+Write-Ok "Running as Administrator"
+Write-Ok "winget is available"
+Write-Host ""
+
+Initialize-Folders
+Initialize-Registry
+Copy-ModuleFiles
+New-Launcher
+Add-ToUserPath
+Set-JavaEnvironment
+
+Write-Title "myTool installed successfully!"
+Write-Host ""
+Write-Host "  Open a new terminal and run:" -ForegroundColor White
+Write-Host "  myTool help" -ForegroundColor Cyan
+Write-Host "  myTool install temurin.21" -ForegroundColor Cyan
+Write-Host ""
