@@ -23,7 +23,8 @@ function Show-Help {
     Write-Host "    install VENDOR.VERSION   Install a JDK version" -ForegroundColor Gray
     Write-Host "    use     VENDOR-VERSION   Switch active Java version" -ForegroundColor Gray
     Write-Host "    list                     List installed versions" -ForegroundColor Gray
-    Write-Host "    uninstall VENDOR-VERSION Remove an installed version" -ForegroundColor Gray
+    Write-Host "    uninstall VENDOR-VERSION Remove an installed JDK version" -ForegroundColor Gray
+    Write-Host "    uninstall --self         Remove jdm from this machine" -ForegroundColor Gray
     Write-Host "    version                  Show jdm version" -ForegroundColor Gray
     Write-Host "    help                     Show this help message" -ForegroundColor Gray
     Write-Host ""
@@ -33,6 +34,7 @@ function Show-Help {
     Write-Host "    jdm use temurin-21" -ForegroundColor Cyan
     Write-Host "    jdm list" -ForegroundColor Cyan
     Write-Host "    jdm uninstall corretto-17" -ForegroundColor Cyan
+    Write-Host "    jdm uninstall --self" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  Supported vendors:" -ForegroundColor White
     Write-Host "    temurin    Eclipse Temurin (Adoptium)" -ForegroundColor Gray
@@ -42,6 +44,67 @@ function Show-Help {
     Write-Host ""
 }
 
+function Invoke-SelfUninstall {
+    Write-Host ""
+    Write-Host "  This will remove jdm and all its files from your machine." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  The following will be removed:" -ForegroundColor White
+    Write-Host "    - $env:USERPROFILE\.jdm\" -ForegroundColor Gray
+    Write-Host "    - jdm from user PATH" -ForegroundColor Gray
+    Write-Host "    - JAVA_HOME (user level)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  The following will NOT be removed:" -ForegroundColor White
+    Write-Host "    - Your JDKs in $env:USERPROFILE\.jdks\" -ForegroundColor Gray
+    Write-Host "    - Machine level PATH entries (requires manual Admin cleanup)" -ForegroundColor Gray
+    Write-Host ""
+
+    $confirm = Read-Host "  Are you sure you want to uninstall jdm? (y/n)"
+    if ($confirm -ne "y") {
+        Write-Step "Uninstall cancelled."
+        return
+    }
+
+    # Step 1: Remove from user PATH
+    Write-Step "Removing jdm from PATH..."
+    $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    $cleaned = $currentPath -split ";" | Where-Object { $_ -notmatch "jdm" -and $_ -ne "" }
+    [Environment]::SetEnvironmentVariable("PATH", $cleaned -join ";", "User")
+    Write-Ok "Removed from PATH"
+
+    # Step 2: Remove JAVA_HOME user level
+    Write-Step "Removing JAVA_HOME..."
+    [Environment]::SetEnvironmentVariable("JAVA_HOME", $null, "User")
+    Write-Ok "Removed JAVA_HOME"
+
+    # Step 3: Remove .jdm folder
+    Write-Step "Removing jdm files..."
+    Remove-Item "$env:USERPROFILE\.jdm" -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Ok "Removed $env:USERPROFILE\.jdm"
+
+    # Step 4: Warn about machine level cleanup
+    $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+    $hasJava = $machinePath -split ";" | Where-Object { $_ -match "jdk|java|temurin|corretto|zulu|jdm" }
+
+    Write-Host ""
+    Write-Ok "jdm has been uninstalled!"
+    Write-Host ""
+
+    if ($hasJava) {
+        Write-Host "  [!] Warning: your Machine level PATH still has Java entries:" -ForegroundColor Yellow
+        $hasJava | ForEach-Object { Write-Host "      $_" -ForegroundColor Gray }
+        Write-Host ""
+        Write-Host "  To clean these up run PowerShell as Administrator and remove them manually." -ForegroundColor Gray
+        Write-Host ""
+    }
+
+    Write-Host "  Your JDKs are still in $env:USERPROFILE\.jdks\" -ForegroundColor Gray
+    Write-Host "  Delete that folder manually if you want to remove them too." -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  Open a new terminal for changes to take effect." -ForegroundColor Cyan
+    Write-Host ""
+}
+
+# Command router
 $command = $args[0]
 $rest = $args[1..($args.Length - 1)]
 
@@ -75,6 +138,9 @@ switch ($command) {
         if (-not $rest[0]) {
             Write-Fail "Usage: jdm uninstall VENDOR-VERSION"
             Write-Host "  Example: jdm uninstall temurin-21" -ForegroundColor Cyan
+        }
+        elseif ($rest[0] -eq "--self") {
+            Invoke-SelfUninstall
         }
         else {
             Invoke-Uninstall -Key $rest[0]
