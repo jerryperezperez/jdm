@@ -100,62 +100,68 @@ function Invoke-SelfUninstall {
     Write-Host ""
 }
 
-# Command router
-$command = $args[0]
-$rest = $args[1..($args.Length - 1)]
+function Invoke-Jdm {
+    param(
+        [string]$command,
+        [string[]]$rest
+    )
 
-switch ($command) {
+    switch ($command) {
 
-    "install" {
-        if (-not $rest[0]) {
-            Write-Fail "Usage: jdm install VENDOR.VERSION"
-            Write-Host "  Example: jdm install temurin.21" -ForegroundColor Cyan
+        "install" {
+            if (-not $rest[0]) {
+                Write-Fail "Usage: jdm install VENDOR.VERSION"
+                Write-Host "  Example: jdm install temurin.21" -ForegroundColor Cyan
+            }
+            else {
+                Invoke-Install -UserInput $rest[0]
+            }
         }
-        else {
-            Invoke-Install -UserInput $rest[0]
-        }
-    }
 
-    "use" {
-        if (-not $rest[0]) {
-            Write-Fail "Usage: jdm use VENDOR-VERSION"
-            Write-Host "  Example: jdm use temurin-21" -ForegroundColor Cyan
+        "use" {
+            if (-not $rest[0]) {
+                Write-Fail "Usage: jdm use VENDOR-VERSION"
+                Write-Host "  Example: jdm use temurin-21" -ForegroundColor Cyan
+            }
+            else {
+                Invoke-Use -Key $rest[0]
+            }
         }
-        else {
-            Invoke-Use -Key $rest[0]
+
+        "list" {
+            Invoke-List
         }
-    }
 
-    "list" {
-        Invoke-List
-    }
-
-    "uninstall" {
-        if (-not $rest[0]) {
-            Write-Fail "Usage: jdm uninstall VENDOR-VERSION"
-            Write-Host "  Example: jdm uninstall temurin-21" -ForegroundColor Cyan
+        "uninstall" {
+            if (-not $rest[0]) {
+                Write-Fail "Usage: jdm uninstall VENDOR-VERSION"
+                Write-Host "  Example: jdm uninstall temurin-21" -ForegroundColor Cyan
+            }
+            elseif ($rest[0] -eq "--self") {
+                Invoke-SelfUninstall
+            }
+            else {
+                Invoke-Uninstall -Key $rest[0]
+            }
         }
-        elseif ($rest[0] -eq "--self") {
-            Invoke-SelfUninstall
+
+        "version" {
+            Write-Host ""
+            Write-Host "  jdm v$jdm_VERSION" -ForegroundColor Cyan
+            Write-Host ""
         }
-        else {
-            Invoke-Uninstall -Key $rest[0]
+
+        { $_ -in "help", "--help", "-h", "" } {
+            Show-Help
         }
-    }
 
-    "version" {
-        Write-Host ""
-        Write-Host "  jdm v$jdm_VERSION" -ForegroundColor Cyan
-        Write-Host ""
-    }
-
-    { $_ -in "help", "--help", "-h", "" } {
-        Show-Help
-    }
-
-    default {
-        Write-Host ""
-        Write-Fail "Unknown command: '$command'"
-        Show-Help
+        default {
+            Write-Host ""
+            Write-Fail "Unknown command: '$command'"
+            Show-Help
+        }
     }
 }
+
+# Entry point — preserves exact CLI behavior
+Invoke-Jdm -command $args[0] -rest $args[1..($args.Length - 1)]
