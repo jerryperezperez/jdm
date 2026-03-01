@@ -40,7 +40,6 @@ out/
 # =========================================================
 # PowerShell
 # =========================================================
-*.psd1
 *.psm1
 # Uncomment below only if modules are generated
 # /Modules/
