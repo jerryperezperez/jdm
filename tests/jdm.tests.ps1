@@ -1,24 +1,21 @@
 # jdm.tests.ps1
-# Tests for jdm.ps1 - CLI entry point
-# Note: the command router (switch block) is not tested here because it runs
-# at dot-source time via $args and requires integration-level testing.
+# Tests for module/jdm.ps1 - CLI entry point and command router
 
 Describe "jdm Tests" {
     BeforeAll {
-        # Stub out the dot-sourced dependencies so we can load jdm.ps1 in isolation
+        # Stub out dot-sourced dependencies before loading jdm.ps1
         function Invoke-Install { param($UserInput) }
         function Invoke-Use { param($Key) }
         function Invoke-List { }
         function Invoke-Uninstall { param($Key) }
 
-        # Load only the function definitions by patching the dot-source calls
+        # Strip the dot-source lines and the final entry point call
+        # so we can load only the function definitions cleanly
         $jdmPath = Join-Path $PSScriptRoot "..\module\jdm.ps1"
         $content = Get-Content $jdmPath -Raw
 
-        # Remove the dot-source lines and the switch router block so only
-        # function definitions are evaluated
         $content = $content -replace '(?m)^\. ".*?".*$', ''
-        $content = $content -replace '(?ms)# Command router.*', ''
+        $content = $content -replace '(?m)^Invoke-Jdm.*$', ''
 
         $tempFile = Join-Path $env:TEMP "jdm.tests.temp.ps1"
         $content | Set-Content $tempFile -Encoding UTF8
@@ -33,29 +30,25 @@ Describe "jdm Tests" {
     # ── Write-* helpers ────────────────────────────────────────────────────────
 
     Describe "Write-Step" {
-        It "calls Write-Host without throwing" {
+        It "runs without throwing" {
             { Write-Step "doing something" } | Should -Not -Throw
-        }
-
-        It "accepts any string message" {
-            { Write-Step "test message 123" } | Should -Not -Throw
         }
     }
 
     Describe "Write-Ok" {
-        It "calls Write-Host without throwing" {
+        It "runs without throwing" {
             { Write-Ok "all good" } | Should -Not -Throw
         }
     }
 
     Describe "Write-Fail" {
-        It "calls Write-Host without throwing" {
+        It "runs without throwing" {
             { Write-Fail "something broke" } | Should -Not -Throw
         }
     }
 
     Describe "Write-Title" {
-        It "calls Write-Host without throwing" {
+        It "runs without throwing" {
             { Write-Title "My Title" } | Should -Not -Throw
         }
     }
@@ -67,102 +60,87 @@ Describe "jdm Tests" {
             { Show-Help } | Should -Not -Throw
         }
 
-        It "outputs content to the host" {
-            $output = & { Show-Help } 6>&1
-            $output | Should -Not -BeNullOrEmpty
+        It "mentions all commands" {
+            $output = & { Show-Help } 6>&1 | Out-String
+            $output | Should -Match "install"
+            $output | Should -Match "use"
+            $output | Should -Match "list"
+            $output | Should -Match "uninstall"
+            $output | Should -Match "version"
+            $output | Should -Match "help"
         }
 
-        It "output includes jdm version string" {
-            $output = & { Show-Help } 6>&1
-            ($output -join "") | Should -Match "jdm"
+        It "mentions all supported vendors" {
+            $output = & { Show-Help } 6>&1 | Out-String
+            $output | Should -Match "temurin"
+            $output | Should -Match "corretto"
+            $output | Should -Match "azul"
+            $output | Should -Match "microsoft"
         }
 
-        It "output mentions install command" {
-            $output = & { Show-Help } 6>&1
-            ($output -join "") | Should -Match "install"
+        It "includes version string" {
+            $output = & { Show-Help } 6>&1 | Out-String
+            $output | Should -Match "jdm v\d+\.\d+\.\d+"
         }
 
-        It "output mentions use command" {
-            $output = & { Show-Help } 6>&1
-            ($output -join "") | Should -Match "use"
-        }
-
-        It "output mentions list command" {
-            $output = & { Show-Help } 6>&1
-            ($output -join "") | Should -Match "list"
-        }
-
-        It "output mentions uninstall command" {
-            $output = & { Show-Help } 6>&1
-            ($output -join "") | Should -Match "uninstall"
-        }
-
-        It "output mentions supported vendors" {
-            $output = & { Show-Help } 6>&1
-            $joined = $output -join ""
-            $joined | Should -Match "temurin"
-            $joined | Should -Match "corretto"
-            $joined | Should -Match "azul"
-            $joined | Should -Match "microsoft"
+        It "includes usage examples" {
+            $output = & { Show-Help } 6>&1 | Out-String
+            $output | Should -Match "jdm install temurin"
+            $output | Should -Match "jdm use temurin"
+            $output | Should -Match "jdm list"
+            $output | Should -Match "jdm uninstall"
         }
     }
 
     # ── Invoke-SelfUninstall ───────────────────────────────────────────────────
 
     Describe "Invoke-SelfUninstall" {
-        It "cancels when user does not confirm" {
+        It "cancels and does not proceed when user enters n" {
             Mock Read-Host { return "n" }
             Mock Write-Step { }
-
-            { Invoke-SelfUninstall } | Should -Not -Throw
-
-            Should -Invoke Read-Host -Times 1
-            Should -Invoke Write-Step -Times 1 -ParameterFilter {
-                $msg -match "cancelled"
-            }
-        }
-
-        It "does not modify PATH when user cancels" {
-            Mock Read-Host { return "n" }
-            Mock Write-Step { }
-            Mock Set-Item { }
+            Mock Write-Ok { }
+            Mock Remove-Item { }
 
             Invoke-SelfUninstall
 
-            # Environment should not be touched on cancel
-            Should -Invoke Set-Item -Times 0
+            Should -Invoke Read-Host   -Times 1
+            Should -Invoke Write-Step  -Times 1 -ParameterFilter { $msg -match "cancelled" }
+            Should -Invoke Remove-Item -Times 0
         }
 
-        It "proceeds with uninstall when user confirms with y" {
+        It "cancels when user enters anything other than y" {
+            Mock Read-Host { return "no" }
+            Mock Write-Step { }
+            Mock Remove-Item { }
+
+            Invoke-SelfUninstall
+
+            Should -Invoke Remove-Item -Times 0
+        }
+
+        It "proceeds without throwing when user enters y" {
             Mock Read-Host { return "y" }
             Mock Write-Step { }
             Mock Write-Ok { }
-            Mock Remove-Item { }
             Mock Write-Host { }
-
-            # Mock environment variable calls
-            $originalGetEnv = [Environment]::GetEnvironmentVariable
-            Mock -CommandName "Invoke-Expression" { }
-
-            # Intercept the actual environment calls
-            $env:PATH_BACKUP = $env:PATH
+            Mock Remove-Item { }
 
             { Invoke-SelfUninstall } | Should -Not -Throw
         }
 
-        It "calls Write-Step for each uninstall stage when confirmed" {
+        It "calls Write-Step 3 times when confirmed" {
             Mock Read-Host { return "y" }
             Mock Write-Step { }
             Mock Write-Ok { }
-            Mock Remove-Item { }
             Mock Write-Host { }
+            Mock Remove-Item { }
 
             Invoke-SelfUninstall
 
             Should -Invoke Write-Step -Times 3
         }
 
-        It "calls Remove-Item to delete jdm folder when confirmed" {
+        It "removes the .jdm folder when confirmed" {
             Mock Read-Host { return "y" }
             Mock Write-Step { }
             Mock Write-Ok { }
@@ -173,6 +151,178 @@ Describe "jdm Tests" {
 
             Should -Invoke Remove-Item -Times 1 -ParameterFilter {
                 $Path -match "\.jdm"
+            }
+        }
+
+        It "calls Write-Ok 3 times when confirmed" {
+            Mock Read-Host { return "y" }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+            Mock Write-Host { }
+            Mock Remove-Item { }
+
+            Invoke-SelfUninstall
+
+            Should -Invoke Write-Ok -Times 3
+        }
+    }
+
+    # ── Invoke-Jdm router ──────────────────────────────────────────────────────
+
+    Describe "Invoke-Jdm" {
+
+        Describe "install command" {
+            It "calls Invoke-Install with correct argument" {
+                Mock Invoke-Install { }
+
+                Invoke-Jdm -command "install" -rest @("temurin.21")
+
+                Should -Invoke Invoke-Install -Times 1 -ParameterFilter {
+                    $UserInput -eq "temurin.21"
+                }
+            }
+
+            It "shows usage error when no argument provided" {
+                Mock Invoke-Install { }
+                Mock Write-Fail { }
+                Mock Write-Host { }
+
+                Invoke-Jdm -command "install" -rest @()
+
+                Should -Invoke Invoke-Install -Times 0
+                Should -Invoke Write-Fail     -Times 1
+            }
+        }
+
+        Describe "use command" {
+            It "calls Invoke-Use with correct argument" {
+                Mock Invoke-Use { }
+
+                Invoke-Jdm -command "use" -rest @("temurin-21")
+
+                Should -Invoke Invoke-Use -Times 1 -ParameterFilter {
+                    $Key -eq "temurin-21"
+                }
+            }
+
+            It "shows usage error when no argument provided" {
+                Mock Invoke-Use { }
+                Mock Write-Fail { }
+                Mock Write-Host { }
+
+                Invoke-Jdm -command "use" -rest @()
+
+                Should -Invoke Invoke-Use -Times 0
+                Should -Invoke Write-Fail -Times 1
+            }
+        }
+
+        Describe "list command" {
+            It "calls Invoke-List" {
+                Mock Invoke-List { }
+
+                Invoke-Jdm -command "list" -rest @()
+
+                Should -Invoke Invoke-List -Times 1
+            }
+        }
+
+        Describe "uninstall command" {
+            It "calls Invoke-Uninstall with correct argument" {
+                Mock Invoke-Uninstall { }
+
+                Invoke-Jdm -command "uninstall" -rest @("temurin-21")
+
+                Should -Invoke Invoke-Uninstall -Times 1 -ParameterFilter {
+                    $Key -eq "temurin-21"
+                }
+            }
+
+            It "calls Invoke-SelfUninstall when --self flag is passed" {
+                Mock Invoke-SelfUninstall { }
+
+                Invoke-Jdm -command "uninstall" -rest @("--self")
+
+                Should -Invoke Invoke-SelfUninstall -Times 1
+            }
+
+            It "shows usage error when no argument provided" {
+                Mock Invoke-Uninstall { }
+                Mock Write-Fail { }
+                Mock Write-Host { }
+
+                Invoke-Jdm -command "uninstall" -rest @()
+
+                Should -Invoke Invoke-Uninstall -Times 0
+                Should -Invoke Write-Fail       -Times 1
+            }
+        }
+
+        Describe "version command" {
+            It "outputs version string without throwing" {
+                Mock Write-Host { }
+
+                { Invoke-Jdm -command "version" -rest @() } | Should -Not -Throw
+
+                Should -Invoke Write-Host -Times 3
+            }
+        }
+
+        Describe "help command" {
+            It "calls Show-Help for 'help'" {
+                Mock Show-Help { }
+
+                Invoke-Jdm -command "help" -rest @()
+
+                Should -Invoke Show-Help -Times 1
+            }
+
+            It "calls Show-Help for '--help'" {
+                Mock Show-Help { }
+
+                Invoke-Jdm -command "--help" -rest @()
+
+                Should -Invoke Show-Help -Times 1
+            }
+
+            It "calls Show-Help for '-h'" {
+                Mock Show-Help { }
+
+                Invoke-Jdm -command "-h" -rest @()
+
+                Should -Invoke Show-Help -Times 1
+            }
+
+            It "calls Show-Help when no command given" {
+                Mock Show-Help { }
+
+                Invoke-Jdm -command "" -rest @()
+
+                Should -Invoke Show-Help -Times 1
+            }
+        }
+
+        Describe "default/unknown command" {
+            It "shows error and help for unknown command" {
+                Mock Write-Fail { }
+                Mock Write-Host { }
+                Mock Show-Help { }
+
+                Invoke-Jdm -command "foobar" -rest @()
+
+                Should -Invoke Write-Fail -Times 1
+                Should -Invoke Show-Help  -Times 1
+            }
+
+            It "includes the unknown command name in the error message" {
+                $script:captured = $null
+                Mock Write-Fail { $script:captured = $msg }
+                Mock Write-Host { }
+                Mock Show-Help { }
+
+                Invoke-Jdm -command "badcmd" -rest @()
+
+                $script:captured | Should -Match "badcmd"
             }
         }
     }
