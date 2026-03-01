@@ -5,18 +5,44 @@ $JAVA_CANDIDATES = "$env:USERPROFILE\.jdm\candidates\java"
 $CURRENT_LINK = "$JAVA_CANDIDATES\current"
 $JDM_JAVA_BIN = "$CURRENT_LINK\bin"
 
-function Test-SymlinkCapability {
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+# Wrapper functions for testability
+function Get-CurrentPrincipalIsAdmin {
+    return ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator
     )
-    if ($isAdmin) { return $true }
+}
 
+function Get-DevModeEnabled {
     $devMode = Get-ItemProperty `
         -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" `
         -Name "AllowDevelopmentWithoutDevLicense" `
         -ErrorAction SilentlyContinue
+    
+    return ($devMode -and $devMode.AllowDevelopmentWithoutDevLicense -eq 1)
+}
 
-    if ($devMode -and $devMode.AllowDevelopmentWithoutDevLicense -eq 1) {
+function Get-JdmEnvVariable {
+    param(
+        [Parameter(Mandatory)] [string] $Name,
+        [Parameter(Mandatory)] [System.EnvironmentVariableTarget] $Target
+    )
+    return [Environment]::GetEnvironmentVariable($Name, $Target)
+}
+
+function Set-JdmEnvVariable {
+    param(
+        [Parameter(Mandatory)] [string] $Name,
+        [Parameter(Mandatory)] [string] $Value,
+        [Parameter(Mandatory)] [System.EnvironmentVariableTarget] $Target
+    )
+    [Environment]::SetEnvironmentVariable($Name, $Value, $Target)
+}
+
+function Test-SymlinkCapability {
+    $isAdmin = Get-CurrentPrincipalIsAdmin
+    if ($isAdmin) { return $true }
+
+    if (Get-DevModeEnabled) {
         return $true
     }
 
@@ -72,12 +98,10 @@ function Get-CurrentSymlinkTarget {
 # Then put jdm symlink bin first so it always wins
 function Repair-JavaPath {
 
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
-        [Security.Principal.WindowsBuiltInRole]::Administrator
-    )
+    $isAdmin = Get-CurrentPrincipalIsAdmin
 
     # Always fix User PATH
-    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    $userPath = Get-JdmEnvVariable -Name "PATH" -Target User
     $userCleaned = $userPath -split ";" | Where-Object {
         $_ -notmatch "java" -and
         $_ -notmatch "jdk" -and
@@ -90,12 +114,12 @@ function Repair-JavaPath {
     }
     # Add jdm bin to user PATH
     $newUserPath = $JDM_JAVA_BIN + ";" + ($userCleaned -join ";")
-    [Environment]::SetEnvironmentVariable("PATH", $newUserPath, "User")
+    Set-JdmEnvVariable -Name "PATH" -Value $newUserPath -Target User
     Write-Ok "User PATH updated"
 
     # Fix Machine PATH only if admin
     if ($isAdmin) {
-        $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $machinePath = Get-JdmEnvVariable -Name "PATH" -Target Machine
         $machineCleaned = $machinePath -split ";" | Where-Object {
             $_ -notmatch "java" -and
             $_ -notmatch "jdk" -and
@@ -107,7 +131,7 @@ function Repair-JavaPath {
             $_ -ne ""
         }
         $newMachinePath = $JDM_JAVA_BIN + ";" + ($machineCleaned -join ";")
-        [Environment]::SetEnvironmentVariable("PATH", $newMachinePath, "Machine")
+        Set-JdmEnvVariable -Name "PATH" -Value $newMachinePath -Target Machine
         Write-Ok "Machine PATH updated"
     }
     else {
@@ -117,14 +141,12 @@ function Repair-JavaPath {
 }
 
 function Set-JavaHome {
-    [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT_LINK, "User")
+    Set-JdmEnvVariable -Name "JAVA_HOME" -Value $CURRENT_LINK -Target User
     $env:JAVA_HOME = $CURRENT_LINK
 
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
-        [Security.Principal.WindowsBuiltInRole]::Administrator
-    )
+    $isAdmin = Get-CurrentPrincipalIsAdmin
     if ($isAdmin) {
-        [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT_LINK, "Machine")
+        Set-JdmEnvVariable -Name "JAVA_HOME" -Value $CURRENT_LINK -Target Machine
     }
 
     Write-Ok "JAVA_HOME set to $CURRENT_LINK"
