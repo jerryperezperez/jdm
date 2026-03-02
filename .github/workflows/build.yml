@@ -7,14 +7,14 @@ on:
     branches: [ main, master ]
 
 jobs:
-
-  # ── Job 1: Pester Tests + Coverage ──────────────────────────────────────────
+ # ── Job 1: Pester Tests + Coverage ──────────────────────────────────────────
   test:
     name: Run Pester Tests
     runs-on: windows-latest
+
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4
 
       - name: Install Pester
         shell: pwsh
@@ -38,16 +38,16 @@ jobs:
 
           $result = Invoke-Pester -Configuration $config
 
-          # ── fail on test failures ─────────────────────────────────────────
+          # ── fail on test failures ───────────────────────────────────────────
           if ($result.FailedCount -gt 0) {
-            Write-Host "::error::$($result.FailedCount) test(s) failed."
+            Write-Host "::error::$($result.FailedCount) test(s) failed." -ForegroundColor Red
             exit 1
           }
 
-          # ── fail on low coverage ──────────────────────────────────────────
-          $threshold = 70
+          # ── fail on low coverage ────────────────────────────────────────────
+          $threshold = 70   # <── change this to your desired minimum %
 
-          [xml]$xml = Get-Content coverage.xml
+          [xml]$xml  = Get-Content coverage.xml
           $cov = 0; $mis = 0
           foreach ($pkg in $xml.report.package) {
             $c = $pkg.counter | Where-Object { $_.type -eq "LINE" }
@@ -63,42 +63,39 @@ jobs:
             exit 1
           }
 
-          Write-Host "✅ All tests passed. Coverage: $pct%"
+          Write-Host "✅ All tests passed. Coverage: $pct%" -ForegroundColor Green
 
       - name: Publish Test Results
         if: always()
-        uses: actions/upload-artifact@6f51ac03b87f4154ef4ae7d1ab69d9111e0cd75 # v4.5.0
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: testResults.xml
 
       - name: Publish Coverage XML
         if: always()
-        uses: actions/upload-artifact@6f51ac03b87f4154ef4ae7d1ab69d9111e0cd75 # v4.5.0
+        uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage.xml
 
-  # ── Job 2: SonarQube Analysis ─────────────────────────────────────────────────
+ # ── Job 2: SonarQube Analysis ─────────────────────────────────────────────────
   sonarqube:
     name: SonarQube
     runs-on: windows-latest
-    needs: test
+    needs: test  # only runs after tests pass
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # shallow clones disabled for better analysis relevancy
 
       - name: Download Coverage XML
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89 # v4.2.1
+        uses: actions/download-artifact@v4
         with:
           name: coverage
 
       - name: SonarQube Scan
-        # ⚠️ TODO: replace <SONAR_SHA> with the full commit SHA for v6
-        # Get it from: https://github.com/SonarSource/sonarqube-scan-action/releases/tag/v6
-        # Click the short SHA next to the release to get the full 40-char hash
-        uses: SonarSource/sonarqube-scan-action@aa23b563a0766d3c07853eb04e319eb6cd5dff53 # v6.0.0
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
