@@ -17,6 +17,11 @@ Describe "jdm Tests" {
         $content = $content -replace '(?m)^\. ".*?".*$', ''
         $content = $content -replace '(?m)^Invoke-Jdm.*$', ''
 
+        # patch Invoke-SelfUninstall so we can override the machine PATH during tests
+        $content = $content -replace
+        '([^\n]*\$machinePath = \[Environment\]::GetEnvironmentVariable\("PATH", "Machine"\)[^\n]*)',
+        'if ($script:TestMachinePath) { $machinePath = $script:TestMachinePath } else { $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine") }'
+
         $tempFile = Join-Path $env:TEMP "jdm.tests.temp.ps1"
         $content | Set-Content $tempFile -Encoding UTF8
         . $tempFile
@@ -200,6 +205,21 @@ Describe "jdm Tests" {
 
             # Write-Host is called at the beginning (blank line), during uninstall, and at the end (multiple messages)
             Should -Invoke Write-Host -Times 21
+        }
+
+        It "warns when machine PATH still contains java entries" {
+            Mock Read-Host { return "y" }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+            Mock Write-Host { }
+            Mock Remove-Item { }
+
+            # inject a fake machine path value via variable that our test loader patches
+            $script:TestMachinePath = "C:\\foo;jdkbar"
+
+            Invoke-SelfUninstall
+
+            Should -Invoke Write-Host -ParameterFilter { $Object -like "*Warning: Machine level PATH*" }
         }
     }
 
