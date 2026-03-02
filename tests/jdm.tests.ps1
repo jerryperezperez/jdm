@@ -45,6 +45,57 @@ Describe "jdm Tests" {
             # Standalone call (NO PIPE)
             Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -match "cancelled" }
         }
+
+        It "calls Write-Step 3 times and Write-Ok 3 times on successful uninstall" {
+            Mock Read-Host { return "y" }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+            Mock Write-Host { }
+            Mock Remove-Item { }
+
+            Invoke-SelfUninstall
+
+            Should -Invoke Write-Step -Times 3
+            Should -Invoke Write-Ok -Times 3
+        }
+
+        It "executes without error when user confirms" {
+            Mock Read-Host { return "y" }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+            Mock Write-Host { }
+            Mock Remove-Item { }
+
+            { Invoke-SelfUninstall } | Should -Not -Throw
+        }
+
+        It "calls Write-Host multiple times with detailed messages" {
+            Mock Read-Host { return "y" }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+            Mock Write-Host { }
+            Mock Remove-Item { }
+
+            Invoke-SelfUninstall
+
+            # Write-Host is called at the beginning (blank line), during uninstall, and at the end (multiple messages)
+            Should -Invoke Write-Host -Times 21
+        }
+
+        It "warns when machine PATH still contains java entries" {
+            Mock Read-Host { return "y" }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+            Mock Write-Host { }
+            Mock Remove-Item { }
+
+            # inject a fake machine path value via variable that our test loader patches
+            $script:TestMachinePath = "C:\\foo;jdkbar"
+
+            Invoke-SelfUninstall
+
+            Should -Invoke Write-Host -ParameterFilter { $Object -like "*Warning: Machine level PATH*" }
+        }
     }
 
     # ── Invoke-Jdm (Router) ────────────────────────────────────────────────────
