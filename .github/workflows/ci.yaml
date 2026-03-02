@@ -7,6 +7,7 @@ on:
     branches: [ main, master ]
 
 jobs:
+ # ── Job 1: Pester Tests + Coverage ──────────────────────────────────────────
   test:
     name: Run Pester Tests
     runs-on: windows-latest
@@ -77,3 +78,24 @@ jobs:
         with:
           name: coverage
           path: coverage.xml
+
+ # ── Job 2: SonarQube Analysis ─────────────────────────────────────────────────
+  sonarqube:
+    name: SonarQube
+    runs-on: windows-latest
+    needs: test  # only runs after tests pass
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # shallow clones disabled for better analysis relevancy
+
+      - name: Download Coverage XML
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
