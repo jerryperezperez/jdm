@@ -1,9 +1,13 @@
 # jdm - CLI entry point and command router
 
-. "$PSScriptRoot\commands\install.ps1"
-. "$PSScriptRoot\commands\use.ps1"
-. "$PSScriptRoot\commands\list.ps1"
-. "$PSScriptRoot\commands\uninstall.ps1"
+# --- 1. Guard the dot-sources ---
+# We only load these if we aren't being dot-sourced by a test
+if ($MyInvocation.InvocationName -ne '.') {
+    . "$PSScriptRoot\commands\install.ps1"
+    . "$PSScriptRoot\commands\use.ps1"
+    . "$PSScriptRoot\commands\list.ps1"
+    . "$PSScriptRoot\commands\uninstall.ps1"
+}
 
 function Write-Step { param($msg) Write-Host "  --> $msg" -ForegroundColor Cyan }
 function Write-Ok { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Green }
@@ -163,5 +167,7 @@ function Invoke-Jdm {
     }
 }
 
-# Entry point — preserves exact CLI behavior
-Invoke-Jdm -command $args[0] -rest $args[1..($args.Length - 1)]
+# --- 2. Guard the Entry Point ---
+if ($MyInvocation.InvocationName -ne '.') {
+    Invoke-Jdm -command $args[0] -rest $args[1..($args.Length - 1)]
+}
