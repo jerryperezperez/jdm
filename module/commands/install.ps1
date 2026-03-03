@@ -69,12 +69,10 @@ function Invoke-Install {
     }
 
     # Step 6: Run winget install
-    # Pass a dummy target path - winget will install to Program Files
-    # but we will find the real path afterwards
-    $installBase = "$env:USERPROFILE\.jdks\$key"
+    # winget will install to Program Files; we detect the real path later
     Write-Host ""
 
-    $success = Install-WithWinget -Id $selected.Id -TargetPath $installBase
+    $success = Install-WithWinget -Id $selected.Id
 
     if (-not $success) {
         Write-Fail "Installation failed. Please try again."
