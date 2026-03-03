@@ -7,11 +7,33 @@ on:
     branches: [ main, master ]
 
 jobs:
- # ── Job 1: Pester Tests + Coverage ──────────────────────────────────────────
+  # ── Job 1: Linting (PSScriptAnalyzer) ──────────────────────────────────────
+  lint:
+    name: Lint Code
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force
+          $results = Invoke-ScriptAnalyzer -Path ./module -Recurse -Severity Error,Warning
+
+          if ($results) {
+              $results | Format-Table TargetPath, Line, Message, Severity
+              Write-Host "::error::PSScriptAnalyzer found issues. Please fix them before merging."
+              exit 1
+          } else {
+              Write-Host "Code is clean!"
+          }
+
+  # ── Job 2: Pester Tests + Coverage ──────────────────────────────────────────
   test:
     name: Run Pester Tests
     runs-on: windows-latest
-
+    needs: lint  # <── Won't run unless linting passes
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,14 +60,14 @@ jobs:
 
           $result = Invoke-Pester -Configuration $config
 
-          # ── fail on test failures ───────────────────────────────────────────
+          # fail on test failures
           if ($result.FailedCount -gt 0) {
             Write-Host "::error::$($result.FailedCount) test(s) failed." -ForegroundColor Red
             exit 1
           }
 
-          # ── fail on low coverage ────────────────────────────────────────────
-          $threshold = 70   # <── change this to your desired minimum %
+          # fail on low coverage
+          $threshold = 70
 
           [xml]$xml  = Get-Content coverage.xml
           $cov = 0; $mis = 0
@@ -63,7 +85,7 @@ jobs:
             exit 1
           }
 
-          Write-Host "✅ All tests passed. Coverage: $pct%" -ForegroundColor Green
+          Write-Host "All tests passed. Coverage: $pct%" -ForegroundColor Green
 
       - name: Publish Test Results
         if: always()
@@ -79,16 +101,16 @@ jobs:
           name: coverage
           path: coverage.xml
 
- # ── Job 2: SonarQube Analysis ─────────────────────────────────────────────────
+  # ── Job 3: SonarQube Analysis ─────────────────────────────────────────────────
   sonarqube:
     name: SonarQube
     runs-on: windows-latest
-    needs: test  # only runs after tests pass
+    needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # shallow clones disabled for better analysis relevancy
+          fetch-depth: 0
 
       - name: Download Coverage XML
         uses: actions/download-artifact@v4
