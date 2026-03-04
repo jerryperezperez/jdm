@@ -54,7 +54,7 @@
 **Terminal (PowerShell as Administrator):**
 
 ```powershell
-irm https://raw.githubusercontent.com/youruser/jdm/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/jerryperezperez/jdm/main/install.ps1 | iex
 ```
 
 **GUI installer:**
