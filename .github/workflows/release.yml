@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'   # triggers on v0.1.0, v1.0.0, etc.
+
+jobs:
+
+  # ── Job 1: Reuse test workflow ────────────────────────────────────────────────
+  test:
+    uses: ./.github/workflows/_test.yml
+
+  # ── Job 2: Build EXE & Publish Release ───────────────────────────────────────
+  release:
+    name: Build & Publish Release
+    runs-on: windows-latest
+    needs: test
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Extract version from tag
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          echo "VERSION=$version" >> $env:GITHUB_ENV
+          Write-Host "Building release for version: $version"
+
+      - name: Install ps2exe
+        shell: pwsh
+        run: |
+          Install-Module -Name ps2exe -Force -SkipPublisherCheck
+          Import-Module ps2exe
+
+      - name: Build jdmInstaller.exe
+        shell: pwsh
+        run: |
+          Invoke-ps2exe `
+            -InputFile   "install.ps1" `
+            -OutputFile  "jdmInstaller.exe" `
+            -Title       "jdm Installer" `
+            -Description "Java Version Manager for Windows" `
+            -Version     "${{ env.VERSION }}" `
+            -Copyright   "jerryperezperez" `
+            -RequireAdmin
+
+          Write-Host "jdmInstaller.exe built successfully"
+
+      - name: Verify EXE was created
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "jdmInstaller.exe")) {
+            Write-Host "::error::jdmInstaller.exe was not created."
+            exit 1
+          }
+          $size = (Get-Item "jdmInstaller.exe").Length / 1KB
+          Write-Host "jdmInstaller.exe size: $([math]::Round($size, 1)) KB"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: jdm ${{ github.ref_name }}
+          body: |
+            ## jdm ${{ github.ref_name }}
+
+            ### Installation
+
+            **Option 1 — GUI installer (recommended):**
+            Download `jdmInstaller.exe` below and double-click. UAC will prompt for admin rights automatically.
+
+            **Option 2 — PowerShell one-liner:**
+            ```powershell
+            irm https://raw.githubusercontent.com/jerryperezperez/jdm/${{ github.ref_name }}/install.ps1 | iex
+            ```
+
+            ### Requirements
+            - Windows 10 or later
+            - winget (App Installer from the Microsoft Store)
+            - Administrator privileges OR Developer Mode enabled
+          files: jdmInstaller.exe
+          draft: false
+          prerelease: false
