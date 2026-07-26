@@ -33,6 +33,28 @@ function Test-Winget {
   }
 }
 
+function Add-UserPathEntry {
+  param(
+    [Parameter(Mandatory)] [string] $Entry
+  )
+
+  $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+  $entries = @()
+
+  if ($currentPath) {
+    $entries = $currentPath -split ";" | Where-Object { $_ -ne "" }
+  }
+
+  if ($entries -notcontains $Entry) {
+    $entries += $Entry
+    [Environment]::SetEnvironmentVariable("PATH", ($entries -join ";"), "User")
+    Write-Ok "Added $Entry to user PATH"
+  }
+  else {
+    Write-Ok "Already in user PATH, skipping $Entry"
+  }
+}
+
 function Initialize-Folders {
   Write-Step "Creating folder structure..."
 
@@ -92,47 +114,45 @@ function Copy-ModuleFiles {
 function Add-ToUserPath {
   Write-Step "Adding jdm to user PATH..."
 
-  $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-
-  if ($currentPath -notlike "*jdm*") {
-    [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$MODULE_DIR", "User")
-    Write-Ok "Added $MODULE_DIR to PATH"
-  }
-  else {
-    Write-Ok "Already in PATH, skipping"
-  }
+  Add-UserPathEntry -Entry $MODULE_DIR
+  Add-UserPathEntry -Entry $JAVA_BIN
 }
 
 function Set-JavaEnvironment {
   Write-Step "Setting JAVA_HOME..."
 
-  # User level
   [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT, "User")
+  $env:JAVA_HOME = $CURRENT
 
-  # Machine level (we are admin so this works)
-  [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT, "Machine")
+  Write-Ok "JAVA_HOME set for current user to $CURRENT"
 
-  Write-Ok "JAVA_HOME set to $CURRENT"
+  if (Test-Admin) {
+    Write-Step "Setting machine JAVA_HOME..."
+    [Environment]::SetEnvironmentVariable("JAVA_HOME", $CURRENT, "Machine")
+    Write-Ok "JAVA_HOME set for machine to $CURRENT"
 
-  # Add java\current\bin to Machine PATH
-  Write-Step "Adding java to Machine PATH..."
+    Write-Step "Adding java to Machine PATH..."
 
-  $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+    $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
 
-  # Remove any old hardcoded java paths first
-  $cleaned = $machinePath -split ";" | Where-Object {
-    $_ -notmatch "jdk" -and
-    $_ -notmatch "temurin" -and
-    $_ -notmatch "corretto" -and
-    $_ -notmatch "zulu" -and
-    $_ -notmatch "\.jdm\\candidates" -and
-    $_ -ne ""
+    # Remove any old hardcoded java paths first
+    $cleaned = $machinePath -split ";" | Where-Object {
+      $_ -notmatch "jdk" -and
+      $_ -notmatch "temurin" -and
+      $_ -notmatch "corretto" -and
+      $_ -notmatch "zulu" -and
+      $_ -notmatch "\.jdm\\candidates" -and
+      $_ -ne ""
+    }
+
+    # Add our symlink bin path
+    $newPath = ($cleaned -join ";") + ";$JAVA_BIN"
+    [Environment]::SetEnvironmentVariable("PATH", $newPath, "Machine")
+    Write-Ok "Added $JAVA_BIN to Machine PATH"
   }
-
-  # Add our symlink bin path
-  $newPath = ($cleaned -join ";") + ";$JAVA_BIN"
-  [Environment]::SetEnvironmentVariable("PATH", $newPath, "Machine")
-  Write-Ok "Added $JAVA_BIN to Machine PATH"
+  else {
+    Write-Step "Skipping machine-level PATH updates (run as Administrator for system-wide setup)"
+  }
 }
 
 function New-Launcher {
@@ -149,19 +169,17 @@ Write-Title "Installing jdm - Java Version Manager for Windows"
 Write-Host ""
 
 # Check admin
-if (-not (Test-Admin)) {
-  Write-Fail "Please run this script as Administrator."
-  Write-Fail "Right-click PowerShell and select Run as Administrator."
-  exit 1
-}
-
-# Check winget
 if (-not (Test-Winget)) {
   Write-Fail "winget not found. Install App Installer from the Microsoft Store."
   exit 1
 }
 
-Write-Ok "Running as Administrator"
+if (Test-Admin) {
+  Write-Ok "Running as Administrator"
+}
+else {
+  Write-Step "Not running as Administrator; continuing with user-level setup."
+}
 Write-Ok "winget is available"
 Write-Host ""
 

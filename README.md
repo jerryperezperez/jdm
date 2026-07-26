@@ -43,23 +43,27 @@
 - Windows 10 or later
 - PowerShell 5.1+ *(pre-installed on Windows 10/11)*
 - [winget](https://apps.microsoft.com/detail/9nblggh4nns1) (App Installer — available from the Microsoft Store)
-- **Administrator privileges OR Developer Mode enabled** *(required for symlink creation)*
+- **Administrator privileges OR Developer Mode enabled** *(required for symlink creation when switching versions)*
 
-> **Note on symlinks:** Windows requires either Administrator rights or Developer Mode (`Settings → For developers → Developer Mode`) to create directory symlinks. The installer checks for this upfront and guides you if neither condition is met.
+> **Note on symlinks:** Windows requires either Administrator rights or Developer Mode (`Settings -> For developers -> Developer Mode`) to create directory symlinks. The bootstrap installer can run in a normal PowerShell session, but `jdm use` and the first automatic activation of a JDK still need one of those permissions.
 
 ---
 
 ## Installation
 
-**Terminal (PowerShell as Administrator):**
+**Terminal (PowerShell):**
 
 ```powershell
 irm https://raw.githubusercontent.com/jerryperezperez/jdm/main/install.ps1 | iex
 ```
 
+If you want `jdm` to also update machine-level environment variables during install, run the same command from an elevated PowerShell session. That is optional.
+
 **GUI installer:**
 
 Download `jdmInstaller.exe` from the [Releases](https://github.com/youruser/jdm/releases) page and double-click. Same script, wrapped for non-terminal users via `ps2exe`.
+
+If installation succeeds but switching a Java version later fails with a permission error, enable Developer Mode or rerun the affected `jdm use` command in an elevated PowerShell window.
 
 ---
 
