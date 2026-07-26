@@ -10,8 +10,27 @@ $REGISTRY = "$JDM_DIR\registry.json"
 $SYMLINK_DIR = "$JDM_DIR\candidates\java"
 $CURRENT = "$SYMLINK_DIR\current"
 $JAVA_BIN = "$CURRENT\bin"
-$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
-$MODULE_SRC = "$SCRIPT_DIR\module"
+$REPO_OWNER = "jerryperezperez"
+$REPO_NAME = "jdm"
+$REPO_REF = "main"
+$BOOTSTRAP_DIR = Join-Path $env:TEMP "$REPO_NAME-bootstrap"
+$ARCHIVE_PATH = Join-Path $BOOTSTRAP_DIR "$REPO_NAME-$REPO_REF.zip"
+$EXTRACT_DIR = Join-Path $BOOTSTRAP_DIR "$REPO_NAME-$REPO_REF"
+
+if ($MyInvocation.MyCommand.Path) {
+  $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+else {
+  $SCRIPT_DIR = $null
+}
+
+$MODULE_SRC = $null
+if ($SCRIPT_DIR) {
+  $localModule = Join-Path $SCRIPT_DIR "module"
+  if (Test-Path $localModule) {
+    $MODULE_SRC = $localModule
+  }
+}
 
 function Write-Step { param($msg) Write-Host "  --> $msg" -ForegroundColor Cyan }
 function Write-Ok { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Green }
@@ -31,6 +50,40 @@ function Test-Winget {
   catch {
     return $false
   }
+}
+
+function Resolve-ModuleSource {
+  if ($MODULE_SRC -and (Test-Path $MODULE_SRC)) {
+    return $MODULE_SRC
+  }
+
+  Write-Step "Fetching jdm source from GitHub..."
+
+  if (-not (Test-Path $BOOTSTRAP_DIR)) {
+    New-Item -ItemType Directory -Path $BOOTSTRAP_DIR -Force | Out-Null
+  }
+
+  $archiveUrl = "https://codeload.github.com/$REPO_OWNER/$REPO_NAME/zip/refs/heads/$REPO_REF"
+
+  if (Test-Path $ARCHIVE_PATH) {
+    Remove-Item $ARCHIVE_PATH -Force -ErrorAction SilentlyContinue
+  }
+
+  if (Test-Path $EXTRACT_DIR) {
+    Remove-Item $EXTRACT_DIR -Recurse -Force -ErrorAction SilentlyContinue
+  }
+
+  Invoke-WebRequest -Uri $archiveUrl -OutFile $ARCHIVE_PATH
+  Expand-Archive -Path $ARCHIVE_PATH -DestinationPath $BOOTSTRAP_DIR -Force
+
+  $downloadedModule = Join-Path $EXTRACT_DIR "module"
+
+  if (-not (Test-Path $downloadedModule)) {
+    throw "Downloaded source is missing the module directory."
+  }
+
+  $script:MODULE_SRC = $downloadedModule
+  return $script:MODULE_SRC
 }
 
 function Add-UserPathEntry {
@@ -101,13 +154,15 @@ function Initialize-Registry {
 function Copy-ModuleFiles {
   Write-Step "Copying module files..."
 
-  if (-not (Test-Path $MODULE_SRC)) {
-    Write-Fail "Module source not found at $MODULE_SRC"
-    Write-Fail "Make sure you are running install.ps1 from inside the jdm repo folder."
+  $source = Resolve-ModuleSource
+
+  if (-not (Test-Path $source)) {
+    Write-Fail "Module source not found at $source"
+    Write-Fail "Make sure the GitHub source download completed successfully."
     exit 1
   }
 
-  Copy-Item "$MODULE_SRC\*" $MODULE_DIR -Recurse -Force
+  Copy-Item "$source\*" $MODULE_DIR -Recurse -Force
   Write-Ok "Module files copied to $MODULE_DIR"
 }
 
