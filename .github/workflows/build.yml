@@ -19,7 +19,7 @@ jobs:
         shell: pwsh
         run: |
           Install-Module -Name PSScriptAnalyzer -Force
-          $results = Invoke-ScriptAnalyzer -Path ./module -Recurse -Severity Error,Warning
+          $results = Invoke-ScriptAnalyzer -Path ./module -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
 
           if ($results) {
               $results | Format-Table TargetPath, Line, Message, Severity
