@@ -33,6 +33,23 @@ Describe "Registry Tests" {
         }
     }
 
+    Describe "Normalize-VersionKey" {
+        It "converts hyphen to dot format" {
+            $result = Normalize-VersionKey -Key "temurin-21"
+            $result | Should -Be "temurin.21"
+        }
+
+        It "leaves dot format unchanged" {
+            $result = Normalize-VersionKey -Key "temurin.21"
+            $result | Should -Be "temurin.21"
+        }
+
+        It "handles multiple hyphens" {
+            $result = Normalize-VersionKey -Key "amazon-corretto-17"
+            $result | Should -Be "amazon.corretto.17"
+        }
+    }
+
     Describe "Get-Registry" {
 
         It "returns null when registry file does not exist" {
@@ -144,27 +161,27 @@ Describe "Registry Tests" {
     Describe "Test-VersionInstalled" {
 
         It "returns false when registry is missing" {
-            $result = Test-VersionInstalled -Key "temurin-21"
+            $result = Test-VersionInstalled -Key "temurin.21"
             $result | Should -Be $false
         }
 
-        It "returns true when version is in installed list" {
+        It "returns true when version is in installed list (dot format)" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21", "corretto-17")
-                        current   = "temurin-21"
+                        installed = @("temurin.21", "corretto.17")
+                        current   = "temurin.21"
                         versions  = @{}
                     }
                 }
             }
             $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
 
-            $result = Test-VersionInstalled -Key "temurin-21"
+            $result = Test-VersionInstalled -Key "temurin.21"
             $result | Should -Be $true
         }
 
-        It "returns false when version is not in installed list" {
+        It "returns true when version is in installed list (hyphen backward compat)" {
             $registry = @{
                 candidates = @{
                     java = @{
@@ -176,7 +193,23 @@ Describe "Registry Tests" {
             }
             $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
 
-            $result = Test-VersionInstalled -Key "corretto-17"
+            $result = Test-VersionInstalled -Key "temurin.21"
+            $result | Should -Be $true
+        }
+
+        It "returns false when version is not in installed list" {
+            $registry = @{
+                candidates = @{
+                    java = @{
+                        installed = @("temurin.21")
+                        current   = "temurin.21"
+                        versions  = @{}
+                    }
+                }
+            }
+            $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
+
+            $result = Test-VersionInstalled -Key "corretto.17"
             $result | Should -Be $false
         }
     }
@@ -192,8 +225,8 @@ Describe "Registry Tests" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21")
-                        current   = "temurin-21"
+                        installed = @("temurin.21")
+                        current   = "temurin.21"
                         versions  = @{}
                     }
                 }
@@ -201,14 +234,14 @@ Describe "Registry Tests" {
             $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
 
             $result = Get-CurrentVersion
-            $result | Should -Be "temurin-21"
+            $result | Should -Be "temurin.21"
         }
 
         It "returns null when current is not set" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21")
+                        installed = @("temurin.21")
                         current   = $null
                         versions  = @{}
                     }
@@ -223,7 +256,36 @@ Describe "Registry Tests" {
 
     Describe "Get-Version" {
 
-        It "returns version entry for existing key" {
+        It "returns version entry for existing key (dot format)" {
+            $versionEntry = @{
+                id          = "EclipseAdoptium.Temurin.JDK.21"
+                vendor      = "temurin"
+                version     = "21"
+                path        = "C:\Program Files\Java\jdk-21"
+                installedAt = "2024-01-01"
+            }
+            $registry = @{
+                candidates = @{
+                    java = @{
+                        installed = @("temurin.21")
+                        current   = "temurin.21"
+                        versions  = @{
+                            "temurin.21" = $versionEntry
+                        }
+                    }
+                }
+            }
+            $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
+
+            $result = Get-Version -Key "temurin.21"
+            $result | Should -Not -BeNullOrEmpty
+            $result.id | Should -Be "EclipseAdoptium.Temurin.JDK.21"
+            $result.vendor | Should -Be "temurin"
+            $result.version | Should -Be "21"
+            $result.path | Should -Be "C:\Program Files\Java\jdk-21"
+        }
+
+        It "returns version entry for hyphen key (backward compat)" {
             $versionEntry = @{
                 id          = "EclipseAdoptium.Temurin.JDK.21"
                 vendor      = "temurin"
@@ -244,20 +306,17 @@ Describe "Registry Tests" {
             }
             $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
 
-            $result = Get-Version -Key "temurin-21"
+            $result = Get-Version -Key "temurin.21"
             $result | Should -Not -BeNullOrEmpty
             $result.id | Should -Be "EclipseAdoptium.Temurin.JDK.21"
-            $result.vendor | Should -Be "temurin"
-            $result.version | Should -Be "21"
-            $result.path | Should -Be "C:\Program Files\Java\jdk-21"
         }
 
         It "returns null and logs error for missing key" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21")
-                        current   = "temurin-21"
+                        installed = @("temurin.21")
+                        current   = "temurin.21"
                         versions  = @{}
                     }
                 }
@@ -265,7 +324,7 @@ Describe "Registry Tests" {
             $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
 
             Mock Write-Fail { }
-            $result = Get-Version -Key "corretto-17"
+            $result = Get-Version -Key "corretto.17"
             $result | Should -BeNullOrEmpty
             Should -Invoke Write-Fail -Times 1
         }
@@ -279,21 +338,21 @@ Describe "Registry Tests" {
             $result.Count | Should -Be 0
         }
 
-        It "returns array with key and isCurrent properties" {
+        It "returns array with normalized dot keys and isCurrent properties" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21", "corretto-17")
-                        current   = "temurin-21"
+                        installed = @("temurin.21", "corretto.17")
+                        current   = "temurin.21"
                         versions  = @{
-                            "temurin-21"  = @{
+                            "temurin.21"  = @{
                                 id          = "EclipseAdoptium.Temurin.JDK.21"
                                 vendor      = "temurin"
                                 version     = "21"
                                 path        = "C:\Program Files\Java\jdk-21"
                                 installedAt = "2024-01-01"
                             }
-                            "corretto-17" = @{
+                            "corretto.17" = @{
                                 id          = "Amazon.Corretto.17"
                                 vendor      = "corretto"
                                 version     = "17"
@@ -309,13 +368,39 @@ Describe "Registry Tests" {
             $result = Get-AllVersions
             $result.Count | Should -Be 2
 
-            $temurin = $result | Where-Object { $_.key -eq "temurin-21" }
+            $temurin = $result | Where-Object { $_.key -eq "temurin.21" }
             $temurin | Should -Not -BeNullOrEmpty
             $temurin.isCurrent | Should -Be $true
 
-            $corretto = $result | Where-Object { $_.key -eq "corretto-17" }
+            $corretto = $result | Where-Object { $_.key -eq "corretto.17" }
             $corretto | Should -Not -BeNullOrEmpty
             $corretto.isCurrent | Should -Be $false
+        }
+
+        It "normalizes hyphen keys to dot format in output" {
+            $registry = @{
+                candidates = @{
+                    java = @{
+                        installed = @("temurin-21")
+                        current   = "temurin-21"
+                        versions  = @{
+                            "temurin-21" = @{
+                                id          = "EclipseAdoptium.Temurin.JDK.21"
+                                vendor      = "temurin"
+                                version     = "21"
+                                path        = "C:\Program Files\Java\jdk-21"
+                                installedAt = "2024-01-01"
+                            }
+                        }
+                    }
+                }
+            }
+            $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
+
+            $result = Get-AllVersions
+            $result.Count | Should -Be 1
+            $result[0].key | Should -Be "temurin.21"
+            $result[0].isCurrent | Should -Be $true
         }
 
         It "returns empty array when no versions exist" {
@@ -351,7 +436,22 @@ Describe "Registry Tests" {
             $baseRegistry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
         }
 
-        It "adds new version to registry" {
+        It "adds new version to registry with dot format key" {
+            $result = [PSCustomObject]@{
+                Id   = "EclipseAdoptium.Temurin.JDK.21"
+                Name = "Eclipse Temurin JDK 21"
+            }
+
+            $added = Add-Version -Key "temurin.21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
+            $added | Should -Be $true
+
+            $registry = Get-Registry
+            $registry.candidates.java.installed | Should -Contain "temurin.21"
+            $registry.candidates.java.versions."temurin.21" | Should -Not -BeNullOrEmpty
+            $registry.candidates.java.versions."temurin.21".id | Should -Be "EclipseAdoptium.Temurin.JDK.21"
+        }
+
+        It "normalizes hyphen key to dot format when adding" {
             $result = [PSCustomObject]@{
                 Id   = "EclipseAdoptium.Temurin.JDK.21"
                 Name = "Eclipse Temurin JDK 21"
@@ -361,9 +461,8 @@ Describe "Registry Tests" {
             $added | Should -Be $true
 
             $registry = Get-Registry
-            $registry.candidates.java.installed | Should -Contain "temurin-21"
-            $registry.candidates.java.versions."temurin-21" | Should -Not -BeNullOrEmpty
-            $registry.candidates.java.versions."temurin-21".id | Should -Be "EclipseAdoptium.Temurin.JDK.21"
+            $registry.candidates.java.installed | Should -Contain "temurin.21"
+            $registry.candidates.java.versions."temurin.21" | Should -Not -BeNullOrEmpty
         }
 
         It "does not set current version during registration alone" {
@@ -372,7 +471,7 @@ Describe "Registry Tests" {
                 Name = "Eclipse Temurin JDK 21"
             }
 
-            Add-Version -Key "temurin-21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
+            Add-Version -Key "temurin.21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
 
             $registry = Get-Registry
             $registry.candidates.java.current | Should -BeNullOrEmpty
@@ -384,8 +483,8 @@ Describe "Registry Tests" {
                 Name = "Eclipse Temurin JDK 21"
             }
 
-            Add-Version -Key "temurin-21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
-            Add-Version -Key "temurin-21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
+            Add-Version -Key "temurin.21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
+            Add-Version -Key "temurin.21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
 
             $registry = Get-Registry
             $registry.candidates.java.installed.Count | Should -Be 1
@@ -398,10 +497,10 @@ Describe "Registry Tests" {
             }
 
             $today = Get-Date -Format "yyyy-MM-dd"
-            Add-Version -Key "temurin-21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
+            Add-Version -Key "temurin.21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
 
             $registry = Get-Registry
-            $registry.candidates.java.versions."temurin-21".installedAt | Should -Be $today
+            $registry.candidates.java.versions."temurin.21".installedAt | Should -Be $today
         }
 
         It "returns false when registry is missing" {
@@ -412,7 +511,7 @@ Describe "Registry Tests" {
                 Name = "Eclipse Temurin JDK 21"
             }
 
-            $added = Add-Version -Key "temurin-21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
+            $added = Add-Version -Key "temurin.21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
             $added | Should -Be $false
         }
     }
@@ -423,8 +522,8 @@ Describe "Registry Tests" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21")
-                        current   = "temurin-21"
+                        installed = @("temurin.21")
+                        current   = "temurin.21"
                         versions  = @{}
                     }
                 }
@@ -432,7 +531,7 @@ Describe "Registry Tests" {
             $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
 
             Mock Write-Fail { }
-            $result = Set-CurrentVersion -Key "corretto-17"
+            $result = Set-CurrentVersion -Key "corretto.17"
             $result | Should -Be $false
             Should -Invoke Write-Fail -Times 1
         }
@@ -441,11 +540,33 @@ Describe "Registry Tests" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21", "corretto-17")
-                        current   = "temurin-21"
+                        installed = @("temurin.21", "corretto.17")
+                        current   = "temurin.21"
                         versions  = @{
-                            "temurin-21"  = @{}
-                            "corretto-17" = @{}
+                            "temurin.21"  = @{}
+                            "corretto.17" = @{}
+                        }
+                    }
+                }
+            }
+            $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
+
+            $result = Set-CurrentVersion -Key "corretto.17"
+            $result | Should -Be $true
+
+            $updated = Get-Registry
+            $updated.candidates.java.current | Should -Be "corretto.17"
+        }
+
+        It "accepts hyphen key and normalizes to dot format" {
+            $registry = @{
+                candidates = @{
+                    java = @{
+                        installed = @("temurin.21", "corretto.17")
+                        current   = "temurin.21"
+                        versions  = @{
+                            "temurin.21"  = @{}
+                            "corretto.17" = @{}
                         }
                     }
                 }
@@ -456,13 +577,13 @@ Describe "Registry Tests" {
             $result | Should -Be $true
 
             $updated = Get-Registry
-            $updated.candidates.java.current | Should -Be "corretto-17"
+            $updated.candidates.java.current | Should -Be "corretto.17"
         }
 
         It "returns false when registry is missing" {
             Remove-Item $script:testRegistryPath -Force -ErrorAction SilentlyContinue
 
-            $result = Set-CurrentVersion -Key "temurin-21"
+            $result = Set-CurrentVersion -Key "temurin.21"
             $result | Should -Be $false
         }
     }
@@ -473,8 +594,8 @@ Describe "Registry Tests" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21")
-                        current   = "temurin-21"
+                        installed = @("temurin.21")
+                        current   = "temurin.21"
                         versions  = @{}
                     }
                 }
@@ -482,7 +603,7 @@ Describe "Registry Tests" {
             $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
 
             Mock Write-Fail { }
-            $result = Remove-Version -Key "corretto-17"
+            $result = Remove-Version -Key "corretto.17"
             $result | Should -Be $false
             Should -Invoke Write-Fail -Times 1
         }
@@ -491,11 +612,35 @@ Describe "Registry Tests" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21", "corretto-17")
-                        current   = "temurin-21"
+                        installed = @("temurin.21", "corretto.17")
+                        current   = "temurin.21"
                         versions  = @{
-                            "temurin-21"  = @{}
-                            "corretto-17" = @{}
+                            "temurin.21"  = @{}
+                            "corretto.17" = @{}
+                        }
+                    }
+                }
+            }
+            $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
+
+            $result = Remove-Version -Key "corretto.17"
+            $result | Should -Be $true
+
+            $updated = Get-Registry
+            $updated.candidates.java.installed | Should -Not -Contain "corretto.17"
+            $updated.candidates.java.versions.PSObject.Properties.Name | Should -Not -Contain "corretto.17"
+            $updated.candidates.java.current | Should -Be "temurin.21"
+        }
+
+        It "accepts hyphen key and removes correctly (backward compat)" {
+            $registry = @{
+                candidates = @{
+                    java = @{
+                        installed = @("temurin.21", "corretto.17")
+                        current   = "temurin.21"
+                        versions  = @{
+                            "temurin.21"  = @{}
+                            "corretto.17" = @{}
                         }
                     }
                 }
@@ -506,19 +651,17 @@ Describe "Registry Tests" {
             $result | Should -Be $true
 
             $updated = Get-Registry
-            $updated.candidates.java.installed | Should -Not -Contain "corretto-17"
-            $updated.candidates.java.versions.PSObject.Properties.Name | Should -Not -Contain "corretto-17"
-            $updated.candidates.java.current | Should -Be "temurin-21"
+            $updated.candidates.java.installed | Should -Not -Contain "corretto.17"
         }
 
         It "clears current pointer when removing active version" {
             $registry = @{
                 candidates = @{
                     java = @{
-                        installed = @("temurin-21")
-                        current   = "temurin-21"
+                        installed = @("temurin.21")
+                        current   = "temurin.21"
                         versions  = @{
-                            "temurin-21" = @{}
+                            "temurin.21" = @{}
                         }
                     }
                 }
@@ -526,7 +669,7 @@ Describe "Registry Tests" {
             $registry | ConvertTo-Json -Depth 10 | Set-Content $script:testRegistryPath
 
             Mock Write-Step { }
-            $result = Remove-Version -Key "temurin-21"
+            $result = Remove-Version -Key "temurin.21"
             $result | Should -Be $true
 
             $updated = Get-Registry
@@ -537,7 +680,7 @@ Describe "Registry Tests" {
         It "returns false when registry is missing" {
             Remove-Item $script:testRegistryPath -Force -ErrorAction SilentlyContinue
 
-            $result = Remove-Version -Key "temurin-21"
+            $result = Remove-Version -Key "temurin.21"
             $result | Should -Be $false
         }
     }

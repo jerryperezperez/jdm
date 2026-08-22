@@ -97,7 +97,8 @@ function Get-RegistryKey {
     $vendor = Get-VendorFromId  -Id $Result.Id
     $version = Get-VersionFromId -Id $Result.Id
 
-    return "$vendor-$version"
+    # ADR-0001: Use dot format for version keys
+    return "$vendor.$version"
 }
 
 # ── Snapshot all java.exe paths currently on disk ────────────

@@ -29,8 +29,8 @@
 ~/.jdm/
   candidates/
     java/
-      temurin-21/       ← installed JDK files
-      corretto-17/      ← installed JDK files
+      temurin.21/       ← installed JDK files
+      corretto.17/      ← installed JDK files
       current/          ← symlink → active version
   registry.json         ← tracks all installed versions
   module/               ← jdm PowerShell scripts
@@ -78,14 +78,14 @@ jdm install corretto.17
 jdm install azul.21
 
 # Switch active version
-jdm use temurin-21
-jdm use corretto-17
+jdm use temurin.21
+jdm use corretto.17
 
 # List installed versions
 jdm list
 
 # Remove a version
-jdm uninstall corretto-17
+jdm uninstall corretto.17
 
 # Remove jdm itself
 jdm uninstall --self
@@ -93,6 +93,8 @@ jdm uninstall --self
 # Show version
 jdm version
 ```
+
+> **Note:** Version keys use dot format (`vendor.version`, e.g., `temurin.21`) consistently across all commands. Hyphen format (`temurin-21`) is accepted by `use` and `uninstall` for backward compatibility but is deprecated and will be removed in a future release.
 
 ### Example session
 
@@ -110,8 +112,8 @@ $ jdm install temurin.21
 
   --> Installing EclipseAdoptium.Temurin.21.JDK via winget...
   [OK] JDK installed at: C:\Program Files\Eclipse Adoptium\jdk-21...
-  [OK] Installed : temurin-21
-  [OK] Active    : temurin-21 (current)
+  [OK] Installed : temurin.21
+  [OK] Active    : temurin.21 (current)
 
   Open a new terminal and run: java -version
 ```
@@ -121,15 +123,15 @@ $ jdm list
 
   Installed Java versions:
 
-  --> temurin-21  (current)
+  --> temurin.21  (current)
        Vendor  : temurin
        Version : 21
-       Path    : C:\Users\user\.jdm\candidates\java\temurin-21
+       Path    : C:\Users\user\.jdm\candidates\java\temurin.21
 
-       corretto-17
+       corretto.17
        Vendor  : corretto
        Version : 17
-       Path    : C:\Users\user\.jdm\candidates\java\corretto-17
+       Path    : C:\Users\user\.jdm\candidates\java\corretto.17
 ```
 
 ---

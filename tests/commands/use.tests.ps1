@@ -37,8 +37,8 @@ Describe "Use Command Tests" {
         Mock Test-VersionInstalled { return $false }
         Mock Get-AllVersions { 
             return @(
-                [PSCustomObject]@{ key = "temurin-21"; isCurrent = $true }
-                [PSCustomObject]@{ key = "corretto-17"; isCurrent = $false }
+                [PSCustomObject]@{ key = "temurin.21"; isCurrent = $true }
+                [PSCustomObject]@{ key = "corretto.17"; isCurrent = $false }
             )
         }
         Mock Switch-Version { }
@@ -47,9 +47,9 @@ Describe "Use Command Tests" {
         Mock Write-Host { }
         Mock Write-Fail { }
         
-        Invoke-Use -Key "azul-21"
+        Invoke-Use -Key "azul.21"
         
-        Should -Invoke Test-VersionInstalled -Times 1 -ParameterFilter { $Key -eq "azul-21" }
+        Should -Invoke Test-VersionInstalled -Times 1 -ParameterFilter { $Key -eq "azul.21" }
         Should -Invoke Get-AllVersions -Times 1
         Should -Invoke Switch-Version -Times 0
         Should -Invoke Set-CurrentVersion -Times 0
@@ -66,7 +66,7 @@ Describe "Use Command Tests" {
         }
 
         Mock Test-VersionInstalled { return $true }
-        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-CurrentVersion { return "temurin.21" }
         Mock Get-Version { return $versionEntry }
         Mock Test-Path { return $true } -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
         Mock Test-CurrentSymlinkMatchesTarget { return $true }
@@ -75,7 +75,7 @@ Describe "Use Command Tests" {
         Mock Write-Title { }
         Mock Write-Host { }
         
-        Invoke-Use -Key "temurin-21"
+        Invoke-Use -Key "temurin.21"
         
         Should -Invoke Test-VersionInstalled -Times 1
         Should -Invoke Get-CurrentVersion -Times 1
@@ -94,7 +94,7 @@ Describe "Use Command Tests" {
         }
 
         Mock Test-VersionInstalled { return $true }
-        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-CurrentVersion { return "temurin.21" }
         Mock Get-Version { return $versionEntry }
         Mock Test-Path { return $true } -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
         Mock Test-CurrentSymlinkMatchesTarget { return $false }
@@ -103,11 +103,11 @@ Describe "Use Command Tests" {
         Mock Write-Title { }
         Mock Write-Host { }
 
-        Invoke-Use -Key "temurin-21"
+        Invoke-Use -Key "temurin.21"
 
         Should -Invoke Test-CurrentSymlinkMatchesTarget -Times 1
         Should -Invoke Switch-Version -Times 1 -ParameterFilter { $TargetPath -eq "C:\Program Files\Java\jdk-21" }
-        Should -Invoke Set-CurrentVersion -Times 1 -ParameterFilter { $Key -eq "temurin-21" }
+        Should -Invoke Set-CurrentVersion -Times 1 -ParameterFilter { $Key -eq "temurin.21" }
     }
     
     It "shows error when install path is missing on disk" {
@@ -120,7 +120,7 @@ Describe "Use Command Tests" {
         }
         
         Mock Test-VersionInstalled { return $true }
-        Mock Get-CurrentVersion { return "corretto-17" }
+        Mock Get-CurrentVersion { return "corretto.17" }
         Mock Get-Version { return $versionEntry }
         Mock Test-Path { return $false } -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
         Mock Switch-Version { }
@@ -129,9 +129,9 @@ Describe "Use Command Tests" {
         Mock Write-Host { }
         Mock Write-Fail { }
         
-        Invoke-Use -Key "temurin-21"
+        Invoke-Use -Key "temurin.21"
         
-        Should -Invoke Get-Version -Times 1 -ParameterFilter { $Key -eq "temurin-21" }
+        Should -Invoke Get-Version -Times 1 -ParameterFilter { $Key -eq "temurin.21" }
         Should -Invoke Test-Path -Times 1 -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
         Should -Invoke Switch-Version -Times 0
         Should -Invoke Set-CurrentVersion -Times 0
@@ -148,7 +148,7 @@ Describe "Use Command Tests" {
         }
         
         Mock Test-VersionInstalled { return $true }
-        Mock Get-CurrentVersion { return "corretto-17" }
+        Mock Get-CurrentVersion { return "corretto.17" }
         Mock Get-Version { return $versionEntry }
         Mock Test-Path { return $true } -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
         Mock Switch-Version { return $true }
@@ -156,14 +156,14 @@ Describe "Use Command Tests" {
         Mock Write-Title { }
         Mock Write-Host { }
         
-        Invoke-Use -Key "temurin-21"
+        Invoke-Use -Key "temurin.21"
         
-        Should -Invoke Test-VersionInstalled -Times 1 -ParameterFilter { $Key -eq "temurin-21" }
+        Should -Invoke Test-VersionInstalled -Times 1 -ParameterFilter { $Key -eq "temurin.21" }
         Should -Invoke Get-CurrentVersion -Times 1
-        Should -Invoke Get-Version -Times 1 -ParameterFilter { $Key -eq "temurin-21" }
+        Should -Invoke Get-Version -Times 1 -ParameterFilter { $Key -eq "temurin.21" }
         Should -Invoke Test-Path -Times 1 -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
         Should -Invoke Switch-Version -Times 1 -ParameterFilter { $TargetPath -eq "C:\Program Files\Java\jdk-21" }
-        Should -Invoke Set-CurrentVersion -Times 1 -ParameterFilter { $Key -eq "temurin-21" }
+        Should -Invoke Set-CurrentVersion -Times 1 -ParameterFilter { $Key -eq "temurin.21" }
     }
     
     It "shows error when Switch-Version fails" {
@@ -176,7 +176,7 @@ Describe "Use Command Tests" {
         }
         
         Mock Test-VersionInstalled { return $true }
-        Mock Get-CurrentVersion { return "corretto-17" }
+        Mock Get-CurrentVersion { return "corretto.17" }
         Mock Get-Version { return $versionEntry }
         Mock Test-Path { return $true }
         Mock Switch-Version { return $false }
@@ -185,7 +185,7 @@ Describe "Use Command Tests" {
         Mock Write-Host { }
         Mock Write-Fail { }
         
-        Invoke-Use -Key "temurin-21"
+        Invoke-Use -Key "temurin.21"
         
         Should -Invoke Switch-Version -Times 1
         Should -Invoke Set-CurrentVersion -Times 0
@@ -202,7 +202,7 @@ Describe "Use Command Tests" {
         }
         
         Mock Test-VersionInstalled { return $true }
-        Mock Get-CurrentVersion { return "corretto-17" }
+        Mock Get-CurrentVersion { return "corretto.17" }
         Mock Get-Version { return $versionEntry }
         Mock Test-Path { return $true }
         Mock Switch-Version { return $true }
@@ -211,7 +211,7 @@ Describe "Use Command Tests" {
         Mock Write-Host { }
         Mock Write-Fail { }
         
-        Invoke-Use -Key "temurin-21"
+        Invoke-Use -Key "temurin.21"
         
         Should -Invoke Switch-Version -Times 1
         Should -Invoke Set-CurrentVersion -Times 1

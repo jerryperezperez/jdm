@@ -131,7 +131,7 @@ Describe "Install Command Tests" {
         Mock Search-Winget { return @($result) }
         Mock Filter-JDK { return @($result) }
         Mock Select-Result { return $result }
-        Mock Get-RegistryKey { return "temurin-21" }
+        Mock Get-RegistryKey { return "temurin.21" }
         Mock Test-VersionInstalled { return $true }
         Mock Read-Host { return "n" }
         Mock Install-WithWinget { }
@@ -155,7 +155,7 @@ Describe "Install Command Tests" {
         Mock Search-Winget { return @($result) }
         Mock Filter-JDK { return @($result) }
         Mock Select-Result { return $result }
-        Mock Get-RegistryKey { return "temurin-21" }
+        Mock Get-RegistryKey { return "temurin.21" }
         Mock Test-VersionInstalled { return $false }
         Mock Read-Host { return "y" }
         Mock Install-WithWinget {
@@ -178,7 +178,7 @@ Describe "Install Command Tests" {
 
         Should -Invoke Install-WithWinget -Times 1 -ParameterFilter { $Id -eq $result.Id }
         Should -Invoke Add-Version -Times 1 -ParameterFilter {
-            $Key -eq "temurin-21" -and
+            $Key -eq "temurin.21" -and
             $InstallPath -eq $realPath
         }
         Should -Invoke Switch-Version -Times 1
@@ -194,7 +194,7 @@ Describe "Install Command Tests" {
         Mock Search-Winget { return @($result) }
         Mock Filter-JDK { return @($result) }
         Mock Select-Result { return $result }
-        Mock Get-RegistryKey { return "temurin-21" }
+        Mock Get-RegistryKey { return "temurin.21" }
         Mock Test-VersionInstalled { return $false }
         Mock Read-Host {
             if ($Prompt -like "*Proceed*") { return "y" }
@@ -231,7 +231,7 @@ Describe "Install Command Tests" {
         Mock Search-Winget { return @($result) }
         Mock Filter-JDK { return @($result) }
         Mock Select-Result { return $result }
-        Mock Get-RegistryKey { return "temurin-21" }
+        Mock Get-RegistryKey { return "temurin.21" }
         Mock Test-VersionInstalled { return $false }
         Mock Read-Host { return "y" }
         Mock Install-WithWinget {
