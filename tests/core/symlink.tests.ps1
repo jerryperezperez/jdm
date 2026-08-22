@@ -153,15 +153,102 @@ Describe "Symlink Tests" {
     }
 
     Describe "Set-CurrentSymlink" {
-        It "returns false when Test-SymlinkCapability returns false" {
+        It "uses junction fallback when not admin" {
             Mock Test-SymlinkCapability { return $false }
+            Mock Test-Path {
+                if ($Path -eq "C:\Program Files\Java\jdk-21") { return $true }
+                if ($Path -like "*current*") { return $false }
+                return $false
+            }
+            Mock Get-CurrentSymlinkTarget { return $null }
+            Mock New-Item { return $null }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+
+            $result = Set-CurrentSymlink -TargetPath "C:\Program Files\Java\jdk-21"
+            $result | Should -Be $true
+
+            Should -Invoke Test-SymlinkCapability -Times 1
+            Should -Invoke New-Item -Times 1 -ParameterFilter {
+                $ItemType -eq "Junction" -and
+                $Path -like "*current*" -and
+                $Target -eq "C:\Program Files\Java\jdk-21"
+            }
+        }
+
+        It "falls back to junction when symbolic link creation fails despite reported capability" {
+            Mock Test-SymlinkCapability { return $true }
+            Mock Test-Path {
+                if ($Path -eq "C:\Program Files\Java\jdk-21") { return $true }
+                if ($Path -like "*current*") { return $false }
+                return $false
+            }
+            Mock Get-CurrentSymlinkTarget { return $null }
+            Mock New-Item {
+                if ($ItemType -eq "SymbolicLink") { throw "permission denied" }
+                return $null
+            }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+
+            $result = Set-CurrentSymlink -TargetPath "C:\Program Files\Java\jdk-21"
+            $result | Should -Be $true
+
+            Should -Invoke New-Item -Times 1 -ParameterFilter {
+                $ItemType -eq "SymbolicLink" -and
+                $Path -like "*current*" -and
+                $Target -eq "C:\Program Files\Java\jdk-21"
+            }
+            Should -Invoke New-Item -Times 1 -ParameterFilter {
+                $ItemType -eq "Junction" -and
+                $Path -like "*current*" -and
+                $Target -eq "C:\Program Files\Java\jdk-21"
+            }
+        }
+
+        It "returns false when link creation fails" {
+            Mock Test-SymlinkCapability { return $true }
+            Mock Test-Path { 
+                if ($Path -eq "C:\Program Files\Java\jdk-21") { return $true }
+                if ($Path -like "*current*") { return $false }
+                return $false
+            }
+            Mock Get-CurrentSymlinkTarget { return $null }
+            Mock New-Item { throw "permission denied" }
             Mock Write-Fail { }
-            
+            Mock Write-Step { }
+
             $result = Set-CurrentSymlink -TargetPath "C:\Program Files\Java\jdk-21"
             $result | Should -Be $false
-            
-            Should -Invoke Test-SymlinkCapability -Times 1
+
             Should -Invoke Write-Fail -Times 1
+        }
+
+        It "restores the previous link when the requested switch cannot be created" {
+            Mock Test-Path {
+                if ($Path -eq "C:\Program Files\Java\jdk-21") { return $true }
+                if ($Path -eq "C:\Program Files\Java\jdk-17") { return $true }
+                if ($Path -like "*current*") { return $true }
+                return $false
+            }
+            Mock Get-CurrentSymlinkTarget { return "C:\Program Files\Java\jdk-17" }
+            Mock Get-PreferredCurrentLinkTypes { return @("SymbolicLink", "Junction") }
+            Mock Remove-Item { }
+            Mock New-JdmCurrentLink { return [PSCustomObject]@{ Success = $false; Error = "permission denied" } } -ParameterFilter { $TargetPath -eq "C:\Program Files\Java\jdk-21" }
+            Mock New-JdmCurrentLink { return [PSCustomObject]@{ Success = $true; Error = $null } } -ParameterFilter { $TargetPath -eq "C:\Program Files\Java\jdk-17" }
+            Mock Write-Fail { }
+            Mock Write-Step { }
+
+            $result = Set-CurrentSymlink -TargetPath "C:\Program Files\Java\jdk-21"
+            $result | Should -Be $false
+
+            Should -Invoke Remove-Item -Times 1
+            Should -Invoke New-JdmCurrentLink -Times 1 -ParameterFilter {
+                $TargetPath -eq "C:\Program Files\Java\jdk-17"
+            }
+            Should -Invoke Write-Step -ParameterFilter {
+                $msg -like "*Restoring previous Java link*"
+            }
         }
         
         It "returns false when target path does not exist" {
@@ -182,6 +269,7 @@ Describe "Symlink Tests" {
                 if ($Path -like "*current*") { return $true }
                 return $false
             }
+            Mock Get-CurrentSymlinkTarget { return "C:\Program Files\Java\jdk-17" }
             Mock Remove-Item { }
             Mock New-Item { return $null }
             Mock Write-Step { }

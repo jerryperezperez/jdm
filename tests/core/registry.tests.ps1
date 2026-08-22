@@ -366,18 +366,16 @@ Describe "Registry Tests" {
             $registry.candidates.java.versions."temurin-21".id | Should -Be "EclipseAdoptium.Temurin.JDK.21"
         }
 
-        It "sets current version when it's the first install" {
+        It "does not set current version during registration alone" {
             $result = [PSCustomObject]@{
                 Id   = "EclipseAdoptium.Temurin.JDK.21"
                 Name = "Eclipse Temurin JDK 21"
             }
 
-            Mock Write-Step { }
             Add-Version -Key "temurin-21" -Result $result -InstallPath "C:\Program Files\Java\jdk-21" -Vendor "temurin" -Version "21"
 
             $registry = Get-Registry
-            $registry.candidates.java.current | Should -Be "temurin-21"
-            Should -Invoke Write-Step -Times 1
+            $registry.candidates.java.current | Should -BeNullOrEmpty
         }
 
         It "does not add duplicate to installed list" {

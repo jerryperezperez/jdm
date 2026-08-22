@@ -93,6 +93,7 @@ function Invoke-Install {
     Write-Ok "JDK installed at: $realPath"
 
     # Step 8: Update registry with real path
+    $currentBeforeInstall = Get-CurrentVersion
     $vendor = Get-VendorFromId  -Id $selected.Id
     $version = Get-VersionFromId -Id $selected.Id
 
@@ -109,10 +110,10 @@ function Invoke-Install {
     }
 
     # Step 9: Update symlink
-    $current = Get-CurrentVersion
     $shouldSwitch = $false
+    $activated = $false
 
-    if (-not $current) {
+    if (-not $currentBeforeInstall) {
         $shouldSwitch = $true
     }
     else {
@@ -122,9 +123,12 @@ function Invoke-Install {
     }
 
     if ($shouldSwitch) {
-        $switched = Switch-Version -TargetPath $realPath
-        if ($switched) {
+        $activated = Switch-Version -TargetPath $realPath
+        if ($activated) {
             Set-CurrentVersion -Key $key | Out-Null
+        }
+        else {
+            Write-Fail "Installed '$key', but could not activate it because the current Java link was not updated."
         }
     }
 
@@ -133,10 +137,15 @@ function Invoke-Install {
     Write-Host "  [OK] Installed : $key" -ForegroundColor Green
     Write-Host "  [OK] Path      : $realPath" -ForegroundColor Green
 
-    if ($shouldSwitch) {
+    if ($activated) {
         Write-Host "  [OK] Active    : $key (current)" -ForegroundColor Green
         Write-Host ""
         Write-Host "  Open a new terminal and run: java -version" -ForegroundColor Cyan
+    }
+    elseif ($shouldSwitch) {
+        Write-Host ""
+        Write-Host "  Activation was skipped because the current Java link could not be created." -ForegroundColor Yellow
+        Write-Host "  Fix the permission issue and run: jdm use $key" -ForegroundColor Cyan
     }
     else {
         Write-Host ""

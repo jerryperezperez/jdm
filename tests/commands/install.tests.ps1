@@ -221,6 +221,43 @@ Describe "Install Command Tests" {
         Should -Invoke Add-Version -Times 1
         Should -Invoke Switch-Version -Times 0
         }
+
+        It "does not mark the version active when activation fails" {
+        $result = [PSCustomObject]@{ Name = "Temurin JDK 21"; Id = "EclipseAdoptium.Temurin.JDK.21" }
+        $realPath = "C:\Program Files\Eclipse Adoptium\jdk-21"
+        $markerFile = Join-Path $script:tempUserProfile.FullName ".jdm\tmp\last_install_path.txt"
+
+        Mock Build-Query { return "temurin.21" }
+        Mock Search-Winget { return @($result) }
+        Mock Filter-JDK { return @($result) }
+        Mock Select-Result { return $result }
+        Mock Get-RegistryKey { return "temurin-21" }
+        Mock Test-VersionInstalled { return $false }
+        Mock Read-Host { return "y" }
+        Mock Install-WithWinget {
+            Set-Content $markerFile $realPath
+            return $true
+        }
+        Mock Get-CurrentVersion { return $null }
+        Mock Get-VendorFromId { return "temurin" }
+        Mock Get-VersionFromId { return "21" }
+        Mock Add-Version { return $true }
+        Mock Switch-Version { return $false }
+        Mock Set-CurrentVersion { }
+        Mock Write-Title { }
+        Mock Write-Host { }
+        Mock Write-Step { }
+        Mock Write-Ok { }
+        Mock Write-Fail { }
+
+        Invoke-Install -UserInput "temurin.21"
+
+        Should -Invoke Switch-Version -Times 1
+        Should -Invoke Set-CurrentVersion -Times 0
+        Should -Invoke Write-Fail -Times 1 -ParameterFilter {
+            $msg -like "*could not activate*"
+        }
+        }
     }
 
     Describe "Select-Result" {

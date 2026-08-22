@@ -34,16 +34,33 @@ function Invoke-List {
         Write-Host "  [!] Warning: symlink is missing. Run 'jdm use $current' to fix." -ForegroundColor Yellow
         Write-Host ""
     }
+    elseif ($current) {
+        $currentEntry = $all | Where-Object { $_.key -eq $current } | Select-Object -First 1
+        if ($currentEntry -and -not (Test-JdmPathEquals -LeftPath $symlinkTarget -RightPath $currentEntry.path)) {
+            Write-Host "  [!] Warning: registry current '$current' does not match the active Java link." -ForegroundColor Yellow
+            Write-Host ""
+        }
+    }
 
     # ── Step 3: Display installed versions ───────────────────
     Write-Host "  Installed Java versions:" -ForegroundColor White
     Write-Host ""
 
     foreach ($v in $all) {
-        if ($v.isCurrent) {
+        $isActive = Test-JdmPathEquals -LeftPath $symlinkTarget -RightPath $v.path
+        $isConfiguredCurrent = ($v.key -eq $current)
+
+        if ($isActive) {
             # Active version — highlighted
             Write-Host "  --> $($v.key)" -NoNewline -ForegroundColor Cyan
             Write-Host "  (current)" -ForegroundColor Green
+            Write-Host "       Vendor  : $($v.vendor)"  -ForegroundColor Gray
+            Write-Host "       Version : $($v.version)" -ForegroundColor Gray
+            Write-Host "       Path    : $($v.path)"    -ForegroundColor Gray
+        }
+        elseif ($isConfiguredCurrent) {
+            Write-Host "       $($v.key)" -NoNewline -ForegroundColor Yellow
+            Write-Host "  (configured, but not active)" -ForegroundColor Yellow
             Write-Host "       Vendor  : $($v.vendor)"  -ForegroundColor Gray
             Write-Host "       Version : $($v.version)" -ForegroundColor Gray
             Write-Host "       Path    : $($v.path)"    -ForegroundColor Gray
