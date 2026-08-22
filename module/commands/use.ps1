@@ -17,6 +17,8 @@ function Invoke-Use {
   Write-Title "jdm use $Key"
   Write-Host ""
 
+  $repairingCurrent = $false
+
   # ── Step 1: Check version exists in registry ──────────────
   if (-not (Test-VersionInstalled -Key $Key)) {
     Write-Fail "'$Key' is not installed."
@@ -40,16 +42,7 @@ function Invoke-Use {
     return
   }
 
-  # ── Step 2: Check if already current ─────────────────────
-  $current = Get-CurrentVersion
-
-  if ($current -eq $Key) {
-    Write-Host "  '$Key' is already the active version." -ForegroundColor Yellow
-    Write-Host ""
-    return
-  }
-
-  # ── Step 3: Get the install path from registry ────────────
+  # ── Step 2: Get the install path from registry ────────────
   $entry = Get-Version -Key $Key
 
   if (-not $entry) {
@@ -61,6 +54,22 @@ function Invoke-Use {
     Write-Fail "Install path not found: $($entry.path)"
     Write-Fail "The registry entry exists but the files are missing. Try reinstalling."
     return
+  }
+
+  # ── Step 3: Check if already current ──────────────────────
+  $current = Get-CurrentVersion
+
+  if ($current -eq $Key) {
+    if (Test-CurrentSymlinkMatchesTarget -TargetPath $entry.path) {
+      Write-Host "  '$Key' is already the active version." -ForegroundColor Yellow
+      Write-Host ""
+      return
+    }
+
+    $repairingCurrent = $true
+    Write-Host "  [!] Registry says '$Key' is current, but the active link is missing or wrong." -ForegroundColor Yellow
+    Write-Host "  [!] Attempting to repair the active Java link..." -ForegroundColor Yellow
+    Write-Host ""
   }
 
   # ── Step 4: Update the symlink ────────────────────────────
@@ -80,7 +89,12 @@ function Invoke-Use {
   }
 
   # ── Done ──────────────────────────────────────────────────
-  Write-Host "  [OK] Switched from '$current' → '$Key'" -ForegroundColor Green
+  if ($repairingCurrent) {
+    Write-Host "  [OK] Repaired active version '$Key'" -ForegroundColor Green
+  }
+  else {
+    Write-Host "  [OK] Switched from '$current' → '$Key'" -ForegroundColor Green
+  }
   Write-Host ""
   Write-Host "  Open a new terminal and run: java -version" -ForegroundColor Cyan
   Write-Host ""

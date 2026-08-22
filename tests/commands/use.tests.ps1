@@ -57,8 +57,19 @@ Describe "Use Command Tests" {
     }
     
     It "shows message when version is already current" {
+        $versionEntry = [PSCustomObject]@{
+            id = "EclipseAdoptium.Temurin.JDK.21"
+            vendor = "temurin"
+            version = "21"
+            path = "C:\Program Files\Java\jdk-21"
+            installedAt = "2024-01-01"
+        }
+
         Mock Test-VersionInstalled { return $true }
         Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-Version { return $versionEntry }
+        Mock Test-Path { return $true } -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
+        Mock Test-CurrentSymlinkMatchesTarget { return $true }
         Mock Switch-Version { }
         Mock Set-CurrentVersion { }
         Mock Write-Title { }
@@ -68,8 +79,35 @@ Describe "Use Command Tests" {
         
         Should -Invoke Test-VersionInstalled -Times 1
         Should -Invoke Get-CurrentVersion -Times 1
+        Should -Invoke Test-CurrentSymlinkMatchesTarget -Times 1
         Should -Invoke Switch-Version -Times 0
         Should -Invoke Set-CurrentVersion -Times 0
+    }
+
+    It "repairs the active link when registry says current but symlink is broken" {
+        $versionEntry = [PSCustomObject]@{
+            id = "EclipseAdoptium.Temurin.JDK.21"
+            vendor = "temurin"
+            version = "21"
+            path = "C:\Program Files\Java\jdk-21"
+            installedAt = "2024-01-01"
+        }
+
+        Mock Test-VersionInstalled { return $true }
+        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-Version { return $versionEntry }
+        Mock Test-Path { return $true } -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
+        Mock Test-CurrentSymlinkMatchesTarget { return $false }
+        Mock Switch-Version { return $true }
+        Mock Set-CurrentVersion { return $true }
+        Mock Write-Title { }
+        Mock Write-Host { }
+
+        Invoke-Use -Key "temurin-21"
+
+        Should -Invoke Test-CurrentSymlinkMatchesTarget -Times 1
+        Should -Invoke Switch-Version -Times 1 -ParameterFilter { $TargetPath -eq "C:\Program Files\Java\jdk-21" }
+        Should -Invoke Set-CurrentVersion -Times 1 -ParameterFilter { $Key -eq "temurin-21" }
     }
     
     It "shows error when install path is missing on disk" {

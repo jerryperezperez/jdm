@@ -131,6 +131,32 @@ Describe "List Command Tests" {
             $Object -like "*Warning: symlink is missing*"
         }
     }
+
+    It "does not mark a version current when registry current is broken" {
+        $version = [PSCustomObject]@{
+            key = "temurin-21"
+            isCurrent = $true
+            vendor = "temurin"
+            version = "21"
+            path = "C:\Program Files\Java\jdk-21"
+        }
+
+        Mock Get-AllVersions { return @($version) }
+        Mock Get-CurrentSymlinkTarget { return $null }
+        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Test-JdmPathEquals { return $false }
+        Mock Write-Title { }
+        Mock Write-Host { }
+
+        Invoke-List
+
+        Should -Not -Invoke Write-Host -ParameterFilter {
+            $Object -like "*--> temurin-21*"
+        }
+        Should -Invoke Write-Host -ParameterFilter {
+            $Object -like "*configured, but not active*"
+        }
+    }
     
     It "does not show warning when symlink exists" {
         $version = [PSCustomObject]@{

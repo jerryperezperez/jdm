@@ -38,6 +38,43 @@ function Set-JdmEnvVariable {
     [Environment]::SetEnvironmentVariable($Name, $Value, $Target)
 }
 
+function Normalize-JdmPath {
+    param(
+        [AllowNull()] [object] $PathValue
+    )
+
+    if ($null -eq $PathValue) {
+        return $null
+    }
+
+    if ($PathValue -is [array] -and $PathValue.Count -gt 0) {
+        $PathValue = $PathValue[0]
+    }
+
+    $normalized = [string]$PathValue
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return $null
+    }
+
+    return $normalized.Replace("/", "\").TrimEnd("\").ToLowerInvariant()
+}
+
+function Test-JdmPathEquals {
+    param(
+        [AllowNull()] [object] $LeftPath,
+        [AllowNull()] [object] $RightPath
+    )
+
+    $left = Normalize-JdmPath -PathValue $LeftPath
+    $right = Normalize-JdmPath -PathValue $RightPath
+
+    if ($null -eq $left -or $null -eq $right) {
+        return $false
+    }
+
+    return $left -eq $right
+}
+
 function Test-SymlinkCapability {
     $isAdmin = Get-CurrentPrincipalIsAdmin
     if ($isAdmin) { return $true }
@@ -49,35 +86,91 @@ function Test-SymlinkCapability {
     return $false
 }
 
+function Get-PreferredCurrentLinkTypes {
+    if (Test-SymlinkCapability) {
+        return @("SymbolicLink", "Junction")
+    }
+
+    return @("Junction")
+}
+
+function New-JdmCurrentLink {
+    param(
+        [Parameter(Mandatory)] [string] $TargetPath,
+        [Parameter(Mandatory)] [string[]] $LinkTypes
+    )
+
+    $lastError = $null
+
+    for ($i = 0; $i -lt $LinkTypes.Count; $i++) {
+        $linkType = $LinkTypes[$i]
+
+        if ($linkType -eq "Junction") {
+            if ($i -eq 0) {
+                Write-Step "Using junction fallback (no administrator rights required)"
+            }
+            else {
+                Write-Step "Symbolic link creation failed; retrying as junction..."
+            }
+        }
+
+        try {
+            New-Item -ItemType $linkType -Path $CURRENT_LINK -Target $TargetPath -Force -ErrorAction Stop | Out-Null
+            Write-Ok "$linkType updated: current -> $TargetPath"
+            return [PSCustomObject]@{
+                Success = $true
+                LinkType = $linkType
+                Error = $null
+            }
+        }
+        catch {
+            $lastError = $_
+        }
+    }
+
+    return [PSCustomObject]@{
+        Success = $false
+        LinkType = $null
+        Error = $lastError
+    }
+}
+
 function Set-CurrentSymlink {
     param(
         [Parameter(Mandatory)] [string] $TargetPath
     )
-
-    if (-not (Test-SymlinkCapability)) {
-        Write-Fail "Cannot create symlink. Run as Administrator or enable Developer Mode."
-        return $false
-    }
 
     if (-not (Test-Path $TargetPath)) {
         Write-Fail "Target path does not exist: $TargetPath"
         return $false
     }
 
+    $previousTarget = Get-CurrentSymlinkTarget
+    $linkTypes = Get-PreferredCurrentLinkTypes
+
     if (Test-Path $CURRENT_LINK) {
         Write-Step "Removing existing symlink..."
         Remove-Item $CURRENT_LINK -Force -Recurse
     }
 
-    try {
-        New-Item -ItemType SymbolicLink -Path $CURRENT_LINK -Target $TargetPath -Force | Out-Null
-        Write-Ok "Symlink updated: current -> $TargetPath"
+    $createResult = New-JdmCurrentLink -TargetPath $TargetPath -LinkTypes $linkTypes
+    if ($createResult.Success) {
         return $true
     }
-    catch {
-        Write-Fail "Failed to create symlink: $_"
-        return $false
+
+    if ($previousTarget -and (Test-Path $previousTarget)) {
+        Write-Step "Restoring previous Java link..."
+        $restoreResult = New-JdmCurrentLink -TargetPath $previousTarget -LinkTypes $linkTypes
+        if ($restoreResult.Success) {
+            Write-Step "Previous Java link restored."
+        }
+        else {
+            Write-Fail "Failed to restore previous Java link: $($restoreResult.Error)"
+        }
     }
+
+    Write-Fail "Failed to create current Java link: $($createResult.Error)"
+    return $false
 }
 
 function Get-CurrentSymlinkTarget {
@@ -87,11 +180,20 @@ function Get-CurrentSymlinkTarget {
 
     $item = Get-Item $CURRENT_LINK -ErrorAction SilentlyContinue
 
-    if ($item.LinkType -eq "SymbolicLink") {
+    if ($item.LinkType -in @("SymbolicLink", "Junction")) {
         return $item.Target
     }
 
     return $null
+}
+
+function Test-CurrentSymlinkMatchesTarget {
+    param(
+        [Parameter(Mandatory)] [string] $TargetPath
+    )
+
+    $currentTarget = Get-CurrentSymlinkTarget
+    return Test-JdmPathEquals -LeftPath $currentTarget -RightPath $TargetPath
 }
 
 # ── Clean all hardcoded java paths from Machine and User PATH ─
@@ -136,7 +238,7 @@ function Repair-JavaPath {
     }
     else {
         Write-Step "Not running as Admin - Machine PATH not cleaned"
-        Write-Step "Run 'jdm repair' as Administrator to fully clean Machine PATH"
+        Write-Step "Re-run this switch from an Administrator PowerShell to fully clean Machine PATH"
     }
 }
 

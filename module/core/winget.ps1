@@ -126,8 +126,7 @@ function Get-JavaSnapshot {
 
 function Install-WithWinget {
     param(
-        [Parameter(Mandatory)] [string] $Id,
-        [Parameter(Mandatory)] [string] $TargetPath
+        [Parameter(Mandatory)] [string] $Id
     )
 
     Write-Step "Installing $Id via winget..."

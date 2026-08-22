@@ -69,12 +69,10 @@ function Invoke-Install {
     }
 
     # Step 6: Run winget install
-    # Pass a dummy target path - winget will install to Program Files
-    # but we will find the real path afterwards
-    $installBase = "$env:USERPROFILE\.jdks\$key"
+    # winget will install to Program Files; we detect the real path later
     Write-Host ""
 
-    $success = Install-WithWinget -Id $selected.Id -TargetPath $installBase
+    $success = Install-WithWinget -Id $selected.Id
 
     if (-not $success) {
         Write-Fail "Installation failed. Please try again."
@@ -95,6 +93,7 @@ function Invoke-Install {
     Write-Ok "JDK installed at: $realPath"
 
     # Step 8: Update registry with real path
+    $currentBeforeInstall = Get-CurrentVersion
     $vendor = Get-VendorFromId  -Id $selected.Id
     $version = Get-VersionFromId -Id $selected.Id
 
@@ -111,10 +110,10 @@ function Invoke-Install {
     }
 
     # Step 9: Update symlink
-    $current = Get-CurrentVersion
     $shouldSwitch = $false
+    $activated = $false
 
-    if (-not $current) {
+    if (-not $currentBeforeInstall) {
         $shouldSwitch = $true
     }
     else {
@@ -124,9 +123,12 @@ function Invoke-Install {
     }
 
     if ($shouldSwitch) {
-        $switched = Switch-Version -TargetPath $realPath
-        if ($switched) {
+        $activated = Switch-Version -TargetPath $realPath
+        if ($activated) {
             Set-CurrentVersion -Key $key | Out-Null
+        }
+        else {
+            Write-Fail "Installed '$key', but could not activate it because the current Java link was not updated."
         }
     }
 
@@ -135,10 +137,15 @@ function Invoke-Install {
     Write-Host "  [OK] Installed : $key" -ForegroundColor Green
     Write-Host "  [OK] Path      : $realPath" -ForegroundColor Green
 
-    if ($shouldSwitch) {
+    if ($activated) {
         Write-Host "  [OK] Active    : $key (current)" -ForegroundColor Green
         Write-Host ""
         Write-Host "  Open a new terminal and run: java -version" -ForegroundColor Cyan
+    }
+    elseif ($shouldSwitch) {
+        Write-Host ""
+        Write-Host "  Activation was skipped because the current Java link could not be created." -ForegroundColor Yellow
+        Write-Host "  Fix the permission issue and run: jdm use $key" -ForegroundColor Cyan
     }
     else {
         Write-Host ""

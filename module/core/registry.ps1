@@ -143,12 +143,6 @@ function Add-Version {
     }
     $registry.candidates.java.installed = $installed.ToArray()
 
-    # If this is the first version, set as current automatically
-    if (-not $registry.candidates.java.current) {
-        $registry.candidates.java.current = $Key
-        Write-Step "Set '$Key' as current version (first install)"
-    }
-
     return Set-Registry -Registry $registry
 }
 
