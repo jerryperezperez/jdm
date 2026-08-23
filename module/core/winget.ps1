@@ -130,22 +130,43 @@ function Install-WithWinget {
         [Parameter(Mandatory)] [string] $Id
     )
 
+    # Check if winget is available
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Fail "winget is not installed or not in PATH"
+        Write-Host "      Please install App Installer from Microsoft Store" -ForegroundColor Yellow
+        return $false
+    }
+
     Write-Step "Installing $Id via winget..."
 
     # Snapshot existing java installations BEFORE install
     Write-Step "Scanning existing Java installations..."
     $before = Get-JavaSnapshot
 
-    # Install without --location since MSI installers ignore it
-    winget install $Id `
+    # Install with --disable-interactivity to show progress but prevent prompts
+    # Stream output through Tee-Object for real-time display
+    Write-Host ""
+    Write-Host "      ── winget ──" -ForegroundColor DarkGray
+
+    $rawOutput = & winget install $Id `
         --source winget `
         --accept-package-agreements `
         --accept-source-agreements `
-        --silent
+        --disable-interactivity 2>&1 | Tee-Object -Variable wingetOutput
+
+    Write-Host "      ── end ──" -ForegroundColor DarkGray
+    Write-Host ""
 
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "winget install failed with exit code $LASTEXITCODE"
         return $false
+    }
+
+    # Stream output to display
+    if ($wingetOutput) {
+        $wingetOutput | ForEach-Object {
+            Write-Host "      $_" -ForegroundColor DarkGray
+        }
     }
 
     Write-Ok "Winget install completed"

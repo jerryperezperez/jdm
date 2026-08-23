@@ -21,6 +21,18 @@
 
 ---
 
+## Terminal Output
+
+Starting with v0.3.0, `jdm install` streams winget's download and installation progress directly to your terminal. You'll see:
+
+- Download progress bars
+- Installation status messages
+- Error details (if any)
+
+Winget output is indented and dimmed to distinguish it from jdm's own messages.
+
+---
+
 ## How It Works
 
 `jdm` installs JDKs into `~/.jdks/` and tracks them in a local `registry.json`. A symlink at `~/.jdm/candidates/java/current` always points to the active version. `JAVA_HOME` and `PATH` are configured once during setup to point at that symlink — switching versions just updates where the symlink points, so your environment variables never need to change again.
