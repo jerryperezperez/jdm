@@ -145,7 +145,7 @@ function Install-WithWinget {
 
     # Install without --silent to show progress; agreement flags prevent prompts
     Write-Host ""
-    Write-Host "      ── winget ──" -ForegroundColor DarkGray
+    Write-Host "      --- winget ---" -ForegroundColor DarkGray
 
     & winget install $Id `
         --source winget `
@@ -154,7 +154,7 @@ function Install-WithWinget {
         Write-Host "      $_" -ForegroundColor DarkGray
     }
 
-    Write-Host "      ── end ──" -ForegroundColor DarkGray
+    Write-Host "      --- end ---" -ForegroundColor DarkGray
     Write-Host ""
 
     if ($LASTEXITCODE -ne 0) {
