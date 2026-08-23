@@ -1,87 +1,80 @@
-name: Release
+name: Release jdm on tag
 
 on:
   push:
     tags:
-      - 'v*'   # triggers on v0.1.0, v1.0.0, etc.
+      - 'v*'   # any tag starting with v, e.g., v0.2.0
 
 jobs:
-
-  # ── Job 1: Reuse test workflow ────────────────────────────────────────────────
-  test:
-    uses: ./.github/workflows/_test.yml
-
-  # ── Job 2: Build EXE & Publish Release ───────────────────────────────────────
-  release:
-    name: Build & Publish Release
+  build-and-release:
     runs-on: windows-latest
-    needs: test
     permissions:
-      contents: write
+      contents: write   # needed for creating releases and uploading assets
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for correct tag info
 
-      - name: Extract version from tag
+      - name: Set up PowerShell Core
+        uses: microsoft/setup-powershell@v2
+        with:
+          pwsh-version: '7.4'
+
+      - name: Install PS2EXE module
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart("v")
-          echo "VERSION=$version" >> $env:GITHUB_ENV
-          Write-Host "Building release for version: $version"
+          Install-Module -Name PS2EXE -Scope CurrentUser -Force -AllowClobber
 
-      - name: Install ps2exe
+      - name: Build jdm.exe
+        id: build_exe
         shell: pwsh
         run: |
-          Install-Module -Name ps2exe -Force -SkipPublisherCheck
-          Import-Module ps2exe
+          $outputDir = "${{ github.workspace }}\\dist"
+          New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+          Invoke-PS2EXE -InputFile "${{ github.workspace }}\\module\\jdm.ps1" -OutputFile "${outputDir}\\jdm.exe" -noConsole
 
-      - name: Build jdmInstaller.exe
+      - name: Package release assets
+        id: package
         shell: pwsh
         run: |
-          Invoke-ps2exe `
-            -InputFile   "install.ps1" `
-            -OutputFile  "jdmInstaller.exe" `
-            -Title       "jdm Installer" `
-            -Description "Java Version Manager for Windows" `
-            -Version     "${{ env.VERSION }}" `
-            -Copyright   "jerryperezperez" `
-            -RequireAdmin
-
-          Write-Host "jdmInstaller.exe built successfully"
-
-      - name: Verify EXE was created
-        shell: pwsh
-        run: |
-          if (-not (Test-Path "jdmInstaller.exe")) {
-            Write-Host "::error::jdmInstaller.exe was not created."
-            exit 1
-          }
-          $size = (Get-Item "jdmInstaller.exe").Length / 1KB
-          Write-Host "jdmInstaller.exe size: $([math]::Round($size, 1)) KB"
+          $dist = "${{ github.workspace }}\\dist"
+          $tag = "${{ github.ref_name }}"
+          # zip the executable
+          $exeZip = "${{ github.workspace }}\\jdm-${tag}-binary.zip"
+          Compress-Archive -Path "$dist\\jdm.exe" -DestinationPath $exeZip -Force
+          # zip source code (excluding .git, .github, .vscode, dist)
+          $srcZip = "${{ github.workspace }}\\jdm-${tag}-source.zip"
+          $exclude = @('.git', '.github', '.vscode', 'dist')
+          $items = Get-ChildItem -Path ${{ github.workspace }} -Recurse -File |
+                    Where-Object { $exclude -notcontains $_.Directory.Name }
+          $items | ForEach-Object { $_.FullName } | Compress-Archive -DestinationPath $srcZip -Force
+          echo "exe_zip=$exeZip" >> $Env:GITHUB_OUTPUT
+          echo "src_zip=$srcZip" >> $Env:GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        id: create_release
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: jdm ${{ github.ref_name }}
-          body: |
-            ## jdm ${{ github.ref_name }}
-
-            ### Installation
-
-            **Option 1 — GUI installer (recommended):**
-            Download `jdmInstaller.exe` below and double-click. UAC will prompt for admin rights automatically.
-
-            **Option 2 — PowerShell one-liner:**
-            ```powershell
-            irm https://raw.githubusercontent.com/jerryperezperez/jdm/${{ github.ref_name }}/install.ps1 | iex
-            ```
-
-            ### Requirements
-            - Windows 10 or later
-            - winget (App Installer from the Microsoft Store)
-            - Administrator privileges OR Developer Mode enabled
-          files: jdmInstaller.exe
+          name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload binary zip asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.exe_zip }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload source zip asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.src_zip }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
