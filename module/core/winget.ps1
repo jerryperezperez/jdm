@@ -110,6 +110,21 @@ function Get-JavaSnapshot {
         "$env:APPDATA"
     )
 
+    # Paths to exclude (IDE bundled runtimes)
+    $excludePatterns = @(
+        "IntelliJ",
+        "PyCharm",
+        "WebStorm",
+        "PhpStorm",
+        "GoLand",
+        "Rider",
+        "CLion",
+        "DataGrip",
+        "Android Studio",
+        "\\jbr",
+        "\\jre"
+    )
+
     $snapshot = @{}
 
     foreach ($root in $searchRoots) {
@@ -118,6 +133,17 @@ function Get-JavaSnapshot {
         $hits = Get-ChildItem -Path $root -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue
         foreach ($hit in $hits) {
             $jdkRoot = $hit.Directory.Parent.FullName
+
+            # Skip IDE bundled JBRs
+            $isExcluded = $false
+            foreach ($pattern in $excludePatterns) {
+                if ($jdkRoot -match [regex]::Escape($pattern)) {
+                    $isExcluded = $true
+                    break
+                }
+            }
+            if ($isExcluded) { continue }
+
             $snapshot[$jdkRoot] = $true
         }
     }
