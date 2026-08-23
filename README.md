@@ -54,7 +54,7 @@
 **Terminal (PowerShell, recommended hosted install):**
 
 ```powershell
-irm https://raw.githubusercontent.com/jerryperezperez/jdm/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/jerryperezperez/jdm/v0.2.0/install.ps1 | iex
 ```
 
 If you want `jdm` to also update machine-level environment variables during install, run either command from an elevated PowerShell session. That is optional.
@@ -64,8 +64,6 @@ If you want `jdm` to also update machine-level environment variables during inst
 Download `jdmInstaller.exe` from the [Releases](https://github.com/jerryperezperez/jdm/releases) page and double-click. Same installer flow, wrapped for non-terminal users via `ps2exe`.
 
 If installation succeeds but switching a Java version later fails with a permission error, enable Developer Mode or rerun the affected `jdm use` command in an elevated PowerShell window.
-
-> **Release note:** the current published release is `v0.2.0`. That tag predates the hosted-installer fix, so the raw one-liner should point at `main` until the next release is cut. When you publish a new release, you can switch the README to that tag if you want a fully version-pinned install path.
 
 ---
 
