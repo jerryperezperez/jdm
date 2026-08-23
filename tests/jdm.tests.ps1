@@ -28,7 +28,7 @@ Describe "jdm Tests" {
     Describe "Show-Help" {
         It "displays the correct version" {
             $output = & { Show-Help } 6>&1 | Out-String
-            $output | Should -Match "jdm v0.1.0"
+            $output | Should -Match "jdm v0.2.0"
         }
     }
 

@@ -14,7 +14,7 @@ function Write-Ok { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Green 
 function Write-Fail { param($msg) Write-Host "  [ERROR] $msg" -ForegroundColor Red }
 function Write-Title { param($msg) Write-Host "`n$msg" -ForegroundColor Yellow }
 
-$jdm_VERSION = "0.1.0"
+$jdm_VERSION = "0.2.0"
 
 function Show-Help {
     Write-Host ""

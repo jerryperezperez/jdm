@@ -65,7 +65,7 @@ Download `jdmInstaller.exe` from the [Releases](https://github.com/jerryperezper
 
 If installation succeeds but switching a Java version later fails with a permission error, enable Developer Mode or rerun the affected `jdm use` command in an elevated PowerShell window.
 
-> **Release note:** the current published release is `v0.1.1`. That tag predates the hosted-installer fix, so the raw one-liner should point at `main` until the next release is cut. When you publish a new release, you can switch the README to that tag if you want a fully version-pinned install path.
+> **Release note:** the current published release is `v0.2.0`. That tag predates the hosted-installer fix, so the raw one-liner should point at `main` until the next release is cut. When you publish a new release, you can switch the README to that tag if you want a fully version-pinned install path.
 
 ---
 
