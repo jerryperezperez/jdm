@@ -120,9 +120,10 @@ function Get-JavaSnapshot {
         "Rider",
         "CLion",
         "DataGrip",
+        "DataSpell",
         "Android Studio",
-        "\\jbr",
-        "\\jre"
+        "\jbr",
+        "\jre"
     )
 
     $snapshot = @{}
@@ -137,7 +138,7 @@ function Get-JavaSnapshot {
             # Skip IDE bundled JBRs
             $isExcluded = $false
             foreach ($pattern in $excludePatterns) {
-                if ($jdkRoot -match [regex]::Escape($pattern)) {
+                if ($jdkRoot -like "*$pattern*") {
                     $isExcluded = $true
                     break
                 }
