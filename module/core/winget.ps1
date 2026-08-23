@@ -148,7 +148,7 @@ function Install-WithWinget {
     Write-Host ""
     Write-Host "      ── winget ──" -ForegroundColor DarkGray
 
-    $rawOutput = & winget install $Id `
+    & winget install $Id `
         --source winget `
         --accept-package-agreements `
         --accept-source-agreements `
