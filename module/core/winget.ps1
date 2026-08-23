@@ -110,6 +110,22 @@ function Get-JavaSnapshot {
         "$env:APPDATA"
     )
 
+    # Paths to exclude (IDE bundled runtimes)
+    $excludePatterns = @(
+        "IntelliJ",
+        "PyCharm",
+        "WebStorm",
+        "PhpStorm",
+        "GoLand",
+        "Rider",
+        "CLion",
+        "DataGrip",
+        "DataSpell",
+        "Android Studio",
+        "\jbr",
+        "\jre"
+    )
+
     $snapshot = @{}
 
     foreach ($root in $searchRoots) {
@@ -118,6 +134,17 @@ function Get-JavaSnapshot {
         $hits = Get-ChildItem -Path $root -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue
         foreach ($hit in $hits) {
             $jdkRoot = $hit.Directory.Parent.FullName
+
+            # Skip IDE bundled JBRs
+            $isExcluded = $false
+            foreach ($pattern in $excludePatterns) {
+                if ($jdkRoot -like "*$pattern*") {
+                    $isExcluded = $true
+                    break
+                }
+            }
+            if ($isExcluded) { continue }
+
             $snapshot[$jdkRoot] = $true
         }
     }
@@ -130,21 +157,48 @@ function Install-WithWinget {
         [Parameter(Mandatory)] [string] $Id
     )
 
+    # Check if winget is available
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Fail "winget is not installed or not in PATH"
+        Write-Host "      Please install App Installer from Microsoft Store" -ForegroundColor Yellow
+        return $false
+    }
+
     Write-Step "Installing $Id via winget..."
 
     # Snapshot existing java installations BEFORE install
     Write-Step "Scanning existing Java installations..."
     $before = Get-JavaSnapshot
 
-    # Install without --location since MSI installers ignore it
-    winget install $Id `
-        --source winget `
-        --accept-package-agreements `
-        --accept-source-agreements `
-        --silent
+    # Install in a dedicated terminal so winget shows progress bars properly
+    Write-Step "Launching winget installer..."
+    Write-Host ""
 
-    if ($LASTEXITCODE -ne 0) {
-        Write-Fail "winget install failed with exit code $LASTEXITCODE"
+    $proc = Start-Process -FilePath "winget" `
+        -ArgumentList @("install", $Id,
+            "--source", "winget",
+            "--accept-package-agreements",
+            "--accept-source-agreements") `
+        -Wait -PassThru
+
+    if ($proc.ExitCode -ne 0) {
+        # 0x8A15001B = package already installed, no update available
+        if ($proc.ExitCode -eq -1978335189) {
+            Write-Ok "Package is already installed and up to date"
+
+            # Find existing path from snapshot
+            $existingPaths = $before.Keys | Select-Object -First 1
+            if ($existingPaths) {
+                $tmpDir = "$env:USERPROFILE\.jdm\tmp"
+                if (-not (Test-Path $tmpDir)) {
+                    New-Item -ItemType Directory $tmpDir -Force | Out-Null
+                }
+                Set-Content "$tmpDir\last_install_path.txt" $existingPaths
+            }
+
+            return $true
+        }
+        Write-Fail "winget install failed with exit code $($proc.ExitCode)"
         return $false
     }
 
