@@ -35,7 +35,7 @@ jobs:
       - name: Run Script Analyzer
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path ./module -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          $results = Invoke-ScriptAnalyzer -Path ./module -Recurse
           if ($results) {
               $results | Format-Table TargetPath, Line, Message, Severity
               Write-Host "::error::PSScriptAnalyzer found issues. Please fix them before merging."
@@ -75,8 +75,7 @@ jobs:
           echo "exe_zip=$exeZip" >> $Env:GITHUB_OUTPUT
           echo "src_zip=$srcZip" >> $Env:GITHUB_OUTPUT
 
-      - name: Create GitHub Release
-        id: create_release
+      - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228
         with:
           tag_name: ${{ github.ref_name }}
@@ -84,19 +83,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload binary zip asset
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228
-        with:
-          files: ${{ steps.package.outputs.exe_zip }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload source zip asset
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228
-        with:
-          files: ${{ steps.package.outputs.src_zip }}
+          files: |
+            ${{ steps.package.outputs.exe_zip }}
+            ${{ steps.package.outputs.src_zip }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
