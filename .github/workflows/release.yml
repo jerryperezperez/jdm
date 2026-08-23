@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0   # needed for correct tag info
 
       - name: Set up PowerShell Core
-        uses: microsoft/setup-powershell@v2
+        uses: microsoft/setup-powershell@38b0e1eaa7cf5fd7b5a8e2c7ad7f3fbfa2c2fe3a
         with:
           pwsh-version: '7.4'
 
