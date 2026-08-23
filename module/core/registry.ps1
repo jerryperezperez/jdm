@@ -6,6 +6,17 @@
 
 $REGISTRY_PATH = "$env:USERPROFILE\.jdm\registry.json"
 
+# ── Normalize a version key to dot format ─────────────────────
+# ADR-0001: Use dot format consistently for version keys
+# Input:  "temurin-21" or "temurin.21"
+# Output: "temurin.21"
+function Normalize-VersionKey {
+    param(
+        [Parameter(Mandatory)] [string] $Key
+    )
+    return $Key -replace "-", "."
+}
+
 # ── Read the full registry ────────────────────────────────────
 # Output: registry object or $null if not found/corrupt
 function Get-Registry {
@@ -43,7 +54,7 @@ function Set-Registry {
 }
 
 # ── Check if a version is already installed ───────────────────
-# Input:  registry key e.g. "temurin-21"
+# Input:  registry key e.g. "temurin.21" or "temurin-21" (backward compat)
 # Output: $true / $false
 function Test-VersionInstalled {
     param(
@@ -53,7 +64,13 @@ function Test-VersionInstalled {
     $registry = Get-Registry
     if (-not $registry) { return $false }
 
-    return $registry.candidates.java.installed -contains $Key
+    $normalized = Normalize-VersionKey -Key $Key
+    $hyphenForm = $normalized -replace "\.", "-"
+
+    # Check all three forms: normalized dot, original input, and hyphen form
+    return $registry.candidates.java.installed -contains $normalized -or
+           $registry.candidates.java.installed -contains $Key -or
+           $registry.candidates.java.installed -contains $hyphenForm
 }
 
 # ── Get the current active version key ───────────────────────
@@ -66,7 +83,7 @@ function Get-CurrentVersion {
 }
 
 # ── Get a specific version entry from the registry ───────────
-# Input:  registry key e.g. "temurin-21"
+# Input:  registry key e.g. "temurin.21" or "temurin-21" (backward compat)
 # Output: version object { id, vendor, version, path, installedAt }
 function Get-Version {
     param(
@@ -76,8 +93,18 @@ function Get-Version {
     $registry = Get-Registry
     if (-not $registry) { return $null }
 
+    $normalized = Normalize-VersionKey -Key $Key
+    $hyphenForm = $normalized -replace "\.", "-"
     $versions = $registry.candidates.java.versions
-    $entry = $versions.PSObject.Properties[$Key]
+
+    # Try normalized (dot) form first, then hyphen form, then original key for backward compat
+    $entry = $versions.PSObject.Properties[$normalized]
+    if (-not $entry -and $hyphenForm -ne $normalized) {
+        $entry = $versions.PSObject.Properties[$hyphenForm]
+    }
+    if (-not $entry) {
+        $entry = $versions.PSObject.Properties[$Key]
+    }
 
     if (-not $entry) {
         Write-Fail "Version '$Key' not found in registry."
@@ -88,27 +115,29 @@ function Get-Version {
 }
 
 # ── Get all installed versions ────────────────────────────────
-# Output: array of version objects with their keys attached
+# Output: array of version objects with their keys attached (always dot format)
 function Get-AllVersions {
     $registry = Get-Registry
     if (-not $registry) { return @() }
 
     $result = @()
     $current = $registry.candidates.java.current
+    $normalizedCurrent = if ($current) { Normalize-VersionKey -Key $current } else { $null }
     $versions = $registry.candidates.java.versions
 
     foreach ($prop in $versions.PSObject.Properties) {
+        $normalizedKey = Normalize-VersionKey -Key $prop.Name
         $entry = $prop.Value
-        $entry | Add-Member -NotePropertyName "key"       -NotePropertyValue $prop.Name  -Force
-        $entry | Add-Member -NotePropertyName "isCurrent" -NotePropertyValue ($prop.Name -eq $current) -Force
+        $entry | Add-Member -NotePropertyName "key"       -NotePropertyValue $normalizedKey  -Force
+        $entry | Add-Member -NotePropertyName "isCurrent" -NotePropertyValue ($normalizedKey -eq $normalizedCurrent) -Force
         $result += $entry
     }
 
-    return $result
+    return ,@($result)
 }
 
 # ── Add a new version to the registry ────────────────────────
-# Input:  key (e.g. "temurin-21"), winget result object, install path
+# Input:  key (e.g. "temurin.21"), winget result object, install path
 function Add-Version {
     param(
         [Parameter(Mandatory)] [string]       $Key,
@@ -121,6 +150,8 @@ function Add-Version {
     $registry = Get-Registry
     if (-not $registry) { return $false }
 
+    $normalized = Normalize-VersionKey -Key $Key
+
     # Build version entry
     $entry = [PSCustomObject]@{
         id          = $Result.Id
@@ -130,16 +161,16 @@ function Add-Version {
         installedAt = (Get-Date -Format "yyyy-MM-dd")
     }
 
-    # Add to versions map
+    # Add to versions map (normalized dot key)
     $registry.candidates.java.versions | Add-Member `
-        -NotePropertyName $Key `
+        -NotePropertyName $normalized `
         -NotePropertyValue $entry `
         -Force
 
     # Add to installed list if not already there
     $installed = [System.Collections.ArrayList]$registry.candidates.java.installed
-    if (-not ($installed -contains $Key)) {
-        $installed.Add($Key) | Out-Null
+    if (-not ($installed -contains $normalized)) {
+        $installed.Add($normalized) | Out-Null
     }
     $registry.candidates.java.installed = $installed.ToArray()
 
@@ -147,7 +178,7 @@ function Add-Version {
 }
 
 # ── Update the current active version ────────────────────────
-# Input:  registry key e.g. "temurin-21"
+# Input:  registry key e.g. "temurin.21" (normalized internally)
 function Set-CurrentVersion {
     param(
         [Parameter(Mandatory)] [string] $Key
@@ -156,17 +187,19 @@ function Set-CurrentVersion {
     $registry = Get-Registry
     if (-not $registry) { return $false }
 
-    if (-not (Test-VersionInstalled -Key $Key)) {
+    $normalized = Normalize-VersionKey -Key $Key
+
+    if (-not (Test-VersionInstalled -Key $normalized)) {
         Write-Fail "Cannot set current: '$Key' is not installed."
         return $false
     }
 
-    $registry.candidates.java.current = $Key
+    $registry.candidates.java.current = $normalized
     return Set-Registry -Registry $registry
 }
 
 # ── Remove a version from the registry ───────────────────────
-# Input:  registry key e.g. "temurin-21"
+# Input:  registry key e.g. "temurin.21" or "temurin-21" (backward compat)
 function Remove-Version {
     param(
         [Parameter(Mandatory)] [string] $Key
@@ -175,23 +208,43 @@ function Remove-Version {
     $registry = Get-Registry
     if (-not $registry) { return $false }
 
-    if (-not (Test-VersionInstalled -Key $Key)) {
+    $normalized = Normalize-VersionKey -Key $Key
+    $hyphenForm = $normalized -replace "\.", "-"
+
+    # Try to find and remove by normalized, hyphen, or original key
+    $foundKey = $null
+    if ($registry.candidates.java.versions.PSObject.Properties[$normalized]) {
+        $foundKey = $normalized
+    }
+    elseif ($hyphenForm -ne $normalized -and $registry.candidates.java.versions.PSObject.Properties[$hyphenForm]) {
+        $foundKey = $hyphenForm
+    }
+    elseif ($registry.candidates.java.versions.PSObject.Properties[$Key]) {
+        $foundKey = $Key
+    }
+
+    if (-not $foundKey) {
         Write-Fail "Cannot remove: '$Key' is not installed."
         return $false
     }
 
     # Remove from versions map
-    $registry.candidates.java.versions.PSObject.Properties.Remove($Key)
+    $registry.candidates.java.versions.PSObject.Properties.Remove($foundKey)
 
-    # Remove from installed list
+    # Remove from installed list (try all forms)
     $installed = [System.Collections.ArrayList]$registry.candidates.java.installed
-    $installed.Remove($Key)
+    $installed.Remove($normalized) | Out-Null
+    $installed.Remove($hyphenForm) | Out-Null
+    $installed.Remove($Key) | Out-Null
     $registry.candidates.java.installed = $installed.ToArray()
 
     # If we removed the current version, clear it
-    if ($registry.candidates.java.current -eq $Key) {
-        $registry.candidates.java.current = $null
-        Write-Step "Warning: removed the active version. Run 'jdm use <version>' to set a new one."
+    if ($registry.candidates.java.current) {
+        $currentNormalized = Normalize-VersionKey -Key $registry.candidates.java.current
+        if ($currentNormalized -eq $normalized) {
+            $registry.candidates.java.current = $null
+            Write-Step "Warning: removed the active version. Run 'jdm use <version>' to set a new one."
+        }
     }
 
     return Set-Registry -Registry $registry

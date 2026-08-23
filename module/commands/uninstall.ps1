@@ -8,11 +8,14 @@
 . "$PSScriptRoot\..\core\symlink.ps1"
 
 # ── Main uninstall entry point ────────────────────────────────
-# Input: version key e.g. "temurin-21"
+# Input: version key e.g. "temurin.21" (dot format preferred, hyphen accepted for backward compat)
 function Invoke-Uninstall {
     param(
         [Parameter(Mandatory)] [string] $Key
     )
+
+    # ADR-0001: Normalize to dot format for consistent internal handling
+    $Key = Normalize-VersionKey -Key $Key
 
     Write-Title "jdm uninstall $Key"
     Write-Host ""

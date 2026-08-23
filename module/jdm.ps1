@@ -25,9 +25,9 @@ function Show-Help {
     Write-Host ""
     Write-Host "  Commands:" -ForegroundColor White
     Write-Host "    install VENDOR.VERSION   Install a JDK version" -ForegroundColor Gray
-    Write-Host "    use     VENDOR-VERSION   Switch active Java version" -ForegroundColor Gray
+    Write-Host "    use     VENDOR.VERSION   Switch active Java version" -ForegroundColor Gray
     Write-Host "    list                     List installed versions" -ForegroundColor Gray
-    Write-Host "    uninstall VENDOR-VERSION Remove an installed JDK version" -ForegroundColor Gray
+    Write-Host "    uninstall VENDOR.VERSION Remove an installed JDK version" -ForegroundColor Gray
     Write-Host "    uninstall --self         Remove jdm from this machine" -ForegroundColor Gray
     Write-Host "    version                  Show jdm version" -ForegroundColor Gray
     Write-Host "    help                     Show this help message" -ForegroundColor Gray
@@ -35,9 +35,9 @@ function Show-Help {
     Write-Host "  Examples:" -ForegroundColor White
     Write-Host "    jdm install temurin.21" -ForegroundColor Cyan
     Write-Host "    jdm install corretto.17" -ForegroundColor Cyan
-    Write-Host "    jdm use temurin-21" -ForegroundColor Cyan
+    Write-Host "    jdm use temurin.21" -ForegroundColor Cyan
     Write-Host "    jdm list" -ForegroundColor Cyan
-    Write-Host "    jdm uninstall corretto-17" -ForegroundColor Cyan
+    Write-Host "    jdm uninstall corretto.17" -ForegroundColor Cyan
     Write-Host "    jdm uninstall --self" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  Supported vendors:" -ForegroundColor White
@@ -124,8 +124,8 @@ function Invoke-Jdm {
 
         "use" {
             if (-not $rest[0]) {
-                Write-Fail "Usage: jdm use VENDOR-VERSION"
-                Write-Host "  Example: jdm use temurin-21" -ForegroundColor Cyan
+                Write-Fail "Usage: jdm use VENDOR.VERSION"
+                Write-Host "  Example: jdm use temurin.21" -ForegroundColor Cyan
             }
             else {
                 Invoke-Use -Key $rest[0]
@@ -138,8 +138,8 @@ function Invoke-Jdm {
 
         "uninstall" {
             if (-not $rest[0]) {
-                Write-Fail "Usage: jdm uninstall VENDOR-VERSION"
-                Write-Host "  Example: jdm uninstall temurin-21" -ForegroundColor Cyan
+                Write-Fail "Usage: jdm uninstall VENDOR.VERSION"
+                Write-Host "  Example: jdm uninstall temurin.21" -ForegroundColor Cyan
             }
             elseif ($rest[0] -eq "--self") {
                 Invoke-SelfUninstall

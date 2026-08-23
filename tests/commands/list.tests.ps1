@@ -50,7 +50,7 @@ Describe "List Command Tests" {
     
     It "displays single version with current marker" {
         $version = [PSCustomObject]@{
-            key = "temurin-21"
+            key = "temurin.21"
             isCurrent = $true
             vendor = "temurin"
             version = "21"
@@ -59,7 +59,7 @@ Describe "List Command Tests" {
         
         Mock Get-AllVersions { return @($version) }
         Mock Get-CurrentSymlinkTarget { return "C:\Program Files\Java\jdk-21" }
-        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-CurrentVersion { return "temurin.21" }
         Mock Write-Title { }
         Mock Write-Host { }
         
@@ -67,21 +67,21 @@ Describe "List Command Tests" {
         
         Should -Invoke Get-AllVersions -Times 1
         Should -Invoke Write-Host -Times 1 -ParameterFilter { 
-            $Object -like "*--> temurin-21*"
+            $Object -like "*--> temurin.21*"
         }
     }
     
     It "displays multiple versions with correct current marker" {
         $versions = @(
             [PSCustomObject]@{
-                key = "temurin-21"
+                key = "temurin.21"
                 isCurrent = $true
                 vendor = "temurin"
                 version = "21"
                 path = "C:\Program Files\Java\jdk-21"
             },
             [PSCustomObject]@{
-                key = "corretto-17"
+                key = "corretto.17"
                 isCurrent = $false
                 vendor = "corretto"
                 version = "17"
@@ -91,7 +91,7 @@ Describe "List Command Tests" {
         
         Mock Get-AllVersions { return $versions }
         Mock Get-CurrentSymlinkTarget { return "C:\Program Files\Java\jdk-21" }
-        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-CurrentVersion { return "temurin.21" }
         Mock Write-Title { }
         Mock Write-Host { }
         
@@ -100,17 +100,17 @@ Describe "List Command Tests" {
         Should -Invoke Get-AllVersions -Times 1
         # Verify Write-Host was called with the current marker pattern
         Should -Invoke Write-Host -ParameterFilter { 
-            $Object -like "*--> temurin-21*"
+            $Object -like "*--> temurin.21*"
         }
         # Verify Write-Host was called for the non-current version (without marker)
         Should -Invoke Write-Host -ParameterFilter { 
-            $Object -like "*corretto-17*" -and $Object -notlike "*-->*"
+            $Object -like "*corretto.17*" -and $Object -notlike "*-->*"
         }
     }
     
     It "shows warning when symlink is missing but current version is set" {
         $version = [PSCustomObject]@{
-            key = "temurin-21"
+            key = "temurin.21"
             isCurrent = $true
             vendor = "temurin"
             version = "21"
@@ -119,7 +119,7 @@ Describe "List Command Tests" {
         
         Mock Get-AllVersions { return @($version) }
         Mock Get-CurrentSymlinkTarget { return $null }
-        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-CurrentVersion { return "temurin.21" }
         Mock Write-Title { }
         Mock Write-Host { }
         
@@ -134,7 +134,7 @@ Describe "List Command Tests" {
 
     It "does not mark a version current when registry current is broken" {
         $version = [PSCustomObject]@{
-            key = "temurin-21"
+            key = "temurin.21"
             isCurrent = $true
             vendor = "temurin"
             version = "21"
@@ -143,7 +143,7 @@ Describe "List Command Tests" {
 
         Mock Get-AllVersions { return @($version) }
         Mock Get-CurrentSymlinkTarget { return $null }
-        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-CurrentVersion { return "temurin.21" }
         Mock Test-JdmPathEquals { return $false }
         Mock Write-Title { }
         Mock Write-Host { }
@@ -151,7 +151,7 @@ Describe "List Command Tests" {
         Invoke-List
 
         Should -Not -Invoke Write-Host -ParameterFilter {
-            $Object -like "*--> temurin-21*"
+            $Object -like "*--> temurin.21*"
         }
         Should -Invoke Write-Host -ParameterFilter {
             $Object -like "*configured, but not active*"
@@ -160,7 +160,7 @@ Describe "List Command Tests" {
     
     It "does not show warning when symlink exists" {
         $version = [PSCustomObject]@{
-            key = "temurin-21"
+            key = "temurin.21"
             isCurrent = $true
             vendor = "temurin"
             version = "21"
@@ -169,7 +169,7 @@ Describe "List Command Tests" {
         
         Mock Get-AllVersions { return @($version) }
         Mock Get-CurrentSymlinkTarget { return "C:\Program Files\Java\jdk-21" }
-        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-CurrentVersion { return "temurin.21" }
         Mock Write-Title { }
         Mock Write-Host { }
         

@@ -8,11 +8,14 @@
 . "$PSScriptRoot\..\core\symlink.ps1"
 
 # ── Main use entry point ──────────────────────────────────────
-# Input: version key e.g. "temurin-21" or "corretto-17"
+# Input: version key e.g. "temurin.21" (dot format preferred, hyphen accepted for backward compat)
 function Invoke-Use {
   param(
     [Parameter(Mandatory)] [string] $Key
   )
+
+  # ADR-0001: Normalize to dot format for consistent internal handling
+  $Key = Normalize-VersionKey -Key $Key
 
   Write-Title "jdm use $Key"
   Write-Host ""

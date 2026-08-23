@@ -42,9 +42,9 @@ Describe "Uninstall Command Tests" {
         Mock Write-Host { }
         Mock Write-Fail { }
 
-        Invoke-Uninstall -Key "azul-21"
+        Invoke-Uninstall -Key "azul.21"
 
-        Should -Invoke Test-VersionInstalled -Times 1 -ParameterFilter { $Key -eq "azul-21" }
+        Should -Invoke Test-VersionInstalled -Times 1 -ParameterFilter { $Key -eq "azul.21" }
         Should -Invoke Get-AllVersions -Times 1
         Should -Invoke Remove-Version -Times 0
         Should -Invoke Remove-Item -Times 0
@@ -62,7 +62,7 @@ Describe "Uninstall Command Tests" {
 
         Mock Test-VersionInstalled { return $true }
         Mock Get-Version { return $versionEntry }
-        Mock Get-CurrentVersion { return "corretto-17" }
+        Mock Get-CurrentVersion { return "corretto.17" }
         Mock Test-Path { return $true } -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
         Mock Read-Host { return "y" }
         Mock Remove-Item { }
@@ -72,13 +72,13 @@ Describe "Uninstall Command Tests" {
         Mock Write-Step { }
         Mock Write-Ok { }
 
-        Invoke-Uninstall -Key "temurin-21"
+        Invoke-Uninstall -Key "temurin.21"
 
         Should -Invoke Test-VersionInstalled -Times 1
         Should -Invoke Get-CurrentVersion -Times 1
         Should -Invoke Read-Host -Times 1
         Should -Invoke Remove-Item -Times 1 -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
-        Should -Invoke Remove-Version -Times 1 -ParameterFilter { $Key -eq "temurin-21" }
+        Should -Invoke Remove-Version -Times 1 -ParameterFilter { $Key -eq "temurin.21" }
     }
 
     It "shows message when files are already missing" {
@@ -92,7 +92,7 @@ Describe "Uninstall Command Tests" {
 
         Mock Test-VersionInstalled { return $true }
         Mock Get-Version { return $versionEntry }
-        Mock Get-CurrentVersion { return "corretto-17" }
+        Mock Get-CurrentVersion { return "corretto.17" }
         Mock Test-Path { return $false } -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
         Mock Read-Host { return "y" }
         Mock Remove-Item { }
@@ -102,7 +102,7 @@ Describe "Uninstall Command Tests" {
         Mock Write-Step { }
         Mock Write-Ok { }
 
-        Invoke-Uninstall -Key "temurin-21"
+        Invoke-Uninstall -Key "temurin.21"
 
         Should -Invoke Remove-Item -Times 0
         Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -like "*already missing*" }
@@ -120,12 +120,12 @@ Describe "Uninstall Command Tests" {
         }
 
         $allVersions = @(
-            [PSCustomObject]@{ key = "temurin-21"; isCurrent = $true }
+            [PSCustomObject]@{ key = "temurin.21"; isCurrent = $true }
         )
 
         Mock Test-VersionInstalled { return $true }
         Mock Get-Version { return $versionEntry }
-        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-CurrentVersion { return "temurin.21" }
         Mock Get-AllVersions { return $allVersions }
         Mock Test-Path { return $true }
         Mock Read-Host { return "y" }
@@ -166,7 +166,7 @@ Describe "Uninstall Command Tests" {
         Mock Write-Host { }
         Mock Write-Step { }
 
-        Invoke-Uninstall -Key "temurin-21"
+        Invoke-Uninstall -Key "temurin.21"
 
         Should -Invoke Read-Host -Times 1
         Should -Invoke Remove-Item -Times 0
@@ -184,13 +184,13 @@ Describe "Uninstall Command Tests" {
         }
 
         $allVersions = @(
-            [PSCustomObject]@{ key = "temurin-21"; isCurrent = $true },
-            [PSCustomObject]@{ key = "corretto-17"; isCurrent = $false }
+            [PSCustomObject]@{ key = "temurin.21"; isCurrent = $true },
+            [PSCustomObject]@{ key = "corretto.17"; isCurrent = $false }
         )
 
         Mock Test-VersionInstalled { return $true }
         Mock Get-Version { return $versionEntry }
-        Mock Get-CurrentVersion { return "temurin-21" }
+        Mock Get-CurrentVersion { return "temurin.21" }
         Mock Get-AllVersions { return $allVersions }
         Mock Read-Host {
             if ($Prompt -like "*Which one*") { return "q" }

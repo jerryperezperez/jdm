@@ -34,15 +34,16 @@ function New-TestRegistry {
 function New-PopulatedTestRegistry {
     param(
         [string] $TempDir,
-        [array] $Versions = @("temurin-21", "corretto-17")
+        [array] $Versions = @("temurin.21", "corretto.17")
     )
     
     $registryPath = Join-Path $TempDir "registry.json"
     
     $versions = @{}
     foreach ($key in $Versions) {
-        $vendor = $key -split "-" | Select-Object -First 1
-        $version = $key -split "-" | Select-Object -Last 1
+        $parts = $key -split "\."
+        $vendor = $parts[0]
+        $version = if ($parts.Count -gt 1) { $parts[1] } else { "unknown" }
         
         $versions[$key] = @{
             id = "EclipseAdoptium.Temurin.JDK.$version"
