@@ -209,4 +209,140 @@ Describe "Uninstall Command Tests" {
         Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -like "*cancelled*" }
     }
     }
+
+    Describe "Invoke-UninstallAll" {
+        BeforeEach {
+            Mock Write-Title { }
+            Mock Write-Host { }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+            Mock Write-Fail { }
+            Mock Read-Host { return "y" }
+            Mock Uninstall-WithWinget { return $true }
+            Mock Remove-Item { }
+            Mock Remove-Version { return $true }
+            Mock Remove-CurrentSymlink { }
+            Mock Get-ChildItem { return @() }
+            Mock Test-Path { return $false }
+        }
+
+        It "returns 0 and removes nothing when no JDKs are installed" {
+            Mock Get-AllVersions { return @() }
+
+            $result = Invoke-UninstallAll
+
+            $result | Should -Be 0
+            Should -Invoke Remove-Version -Times 0
+            Should -Invoke Uninstall-WithWinget -Times 0
+        }
+
+        It "cancels on 'n' and makes no changes" {
+            $entries = @(
+                [PSCustomObject]@{ key = "temurin.21"; id = "EclipseAdoptium.Temurin.JDK.21"; path = "C:\Program Files\Java\jdk-21" }
+            )
+            Mock Get-AllVersions { return $entries }
+            Mock Read-Host { return "n" }
+
+            $result = Invoke-UninstallAll
+
+            $result | Should -Be 0
+            Should -Invoke Remove-Version -Times 0
+            Should -Invoke Remove-Item -Times 0
+            Should -Invoke Uninstall-WithWinget -Times 0
+        }
+
+        It "calls Uninstall-WithWinget once per entry and removes every registry entry" {
+            $entries = @(
+                [PSCustomObject]@{ key = "temurin.21"; id = "EclipseAdoptium.Temurin.JDK.21"; path = "C:\Program Files\Java\jdk-21" },
+                [PSCustomObject]@{ key = "corretto.17"; id = "Amazon.Corretto.17"; path = "C:\Program Files\Java\jdk-17" }
+            )
+            Mock Get-AllVersions { return $entries }
+
+            $result = Invoke-UninstallAll
+
+            $result | Should -Be 0
+            Should -Invoke Uninstall-WithWinget -Times 2
+            Should -Invoke Remove-Version -Times 2
+        }
+
+        It "continues to remaining JDKs when a single removal fails" {
+            $entries = @(
+                [PSCustomObject]@{ key = "temurin.21"; id = "EclipseAdoptium.Temurin.JDK.21"; path = "C:\Program Files\Java\jdk-21" },
+                [PSCustomObject]@{ key = "corretto.17"; id = "Amazon.Corretto.17"; path = "C:\Program Files\Java\jdk-17" }
+            )
+            Mock Get-AllVersions { return $entries }
+            Mock Uninstall-WithWinget { return $false } -ParameterFilter { $Id -eq "EclipseAdoptium.Temurin.JDK.21" }
+
+            $result = Invoke-UninstallAll
+
+            Should -Invoke Uninstall-WithWinget -Times 2
+            Should -Invoke Remove-Version -Times 2
+            $result | Should -Be 1
+        }
+
+        It "deletes the empty vendor directory when no other JDK remains" {
+            $entries = @(
+                [PSCustomObject]@{ key = "temurin.21"; id = "EclipseAdoptium.Temurin.JDK.21"; path = "C:\Program Files\Java\jdk-21" }
+            )
+            Mock Get-AllVersions { return $entries }
+            Mock Test-Path { return $true } -ParameterFilter { $Path -eq "C:\Program Files\Java" }
+            Mock Get-ChildItem { return @() } -ParameterFilter { $Path -eq "C:\Program Files\Java" }
+
+            $result = Invoke-UninstallAll
+
+            $result | Should -Be 0
+            Should -Invoke Remove-Item -Times 1 -ParameterFilter { $Path -eq "C:\Program Files\Java" }
+        }
+
+        It "keeps the vendor directory when a sibling JDK still has bin\java.exe" {
+            $entries = @(
+                [PSCustomObject]@{ key = "temurin.21"; id = "EclipseAdoptium.Temurin.JDK.21"; path = "C:\Program Files\Java\jdk-21" }
+            )
+            Mock Get-AllVersions { return $entries }
+
+            $sibling = [PSCustomObject]@{ FullName = "C:\Program Files\Java\jdk-17" }
+            Mock Get-ChildItem { return @($sibling) } -ParameterFilter { $Path -eq "C:\Program Files\Java" }
+            Mock Test-Path {
+                param($Path)
+                if ($Path -eq "C:\Program Files\Java") { return $true }
+                if ($Path -eq "C:\Program Files\Java\jdk-17\bin\java.exe") { return $true }
+                return $false
+            }
+
+            $result = Invoke-UninstallAll
+
+            $result | Should -Be 0
+            Should -Invoke Remove-Item -Times 0 -ParameterFilter { $Path -eq "C:\Program Files\Java" }
+        }
+
+        It "invokes Remove-CurrentSymlink and prints a notice when zero remain" {
+            $entries = @(
+                [PSCustomObject]@{ key = "temurin.21"; id = "EclipseAdoptium.Temurin.JDK.21"; path = "C:\Program Files\Java\jdk-21" }
+            )
+            $script:allCalls = 0
+            Mock Get-AllVersions {
+                $script:allCalls++
+                if ($script:allCalls -eq 1) { return $entries }
+                return @()
+            }
+
+            Invoke-UninstallAll
+
+            Should -Invoke Remove-CurrentSymlink -Times 1
+            Should -Invoke Write-Host -Times 1 -ParameterFilter { $Object -like "*No active Java version set*" }
+        }
+
+        It "returns non-zero when any removal failed" {
+            $entries = @(
+                [PSCustomObject]@{ key = "temurin.21"; id = "EclipseAdoptium.Temurin.JDK.21"; path = "C:\Program Files\Java\jdk-21" }
+            )
+            Mock Get-AllVersions { return $entries }
+            Mock Uninstall-WithWinget { return $false }
+
+            $result = Invoke-UninstallAll
+
+            $result | Should -Be 1
+            Should -Invoke Write-Host -Times 1 -ParameterFilter { $Object -like "*had issues*" }
+        }
+    }
 }

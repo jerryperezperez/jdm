@@ -28,8 +28,9 @@ function Show-Help {
     Write-Host "    use     VENDOR.VERSION   Switch active Java version" -ForegroundColor Gray
     Write-Host "    list                     List installed versions" -ForegroundColor Gray
     Write-Host "    uninstall VENDOR.VERSION Remove an installed JDK version" -ForegroundColor Gray
+    Write-Host "    uninstall --all-vendors   Remove ALL installed JDKs (bulk)" -ForegroundColor Gray
     Write-Host "    uninstall --self         Remove jdm from this machine" -ForegroundColor Gray
-    Write-Host "    version                  Show jdm version" -ForegroundColor Gray
+    Write-Host "    version                  Show jdm version" -ForegroundColor Cyan
     Write-Host "    help                     Show this help message" -ForegroundColor Gray
     Write-Host ""
     Write-Host "  Examples:" -ForegroundColor White
@@ -38,6 +39,7 @@ function Show-Help {
     Write-Host "    jdm use temurin.21" -ForegroundColor Cyan
     Write-Host "    jdm list" -ForegroundColor Cyan
     Write-Host "    jdm uninstall corretto.17" -ForegroundColor Cyan
+    Write-Host "    jdm uninstall --all-vendors" -ForegroundColor Cyan
     Write-Host "    jdm uninstall --self" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  Supported vendors:" -ForegroundColor White
@@ -144,6 +146,9 @@ function Invoke-Jdm {
             elseif ($rest[0] -eq "--self") {
                 Invoke-SelfUninstall
             }
+            elseif ($rest[0] -eq "--all-vendors") {
+                Invoke-UninstallAll
+            }
             else {
                 Invoke-Uninstall -Key $rest[0]
             }
@@ -169,5 +174,6 @@ function Invoke-Jdm {
 
 # --- 2. Guard the Entry Point ---
 if ($MyInvocation.InvocationName -ne '.') {
-    Invoke-Jdm -command $args[0] -rest $args[1..($args.Length - 1)]
+    $exitCode = Invoke-Jdm -command $args[0] -rest $args[1..($args.Length - 1)]
+    if ($exitCode) { exit $exitCode }
 }
