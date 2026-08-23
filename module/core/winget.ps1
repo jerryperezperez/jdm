@@ -158,6 +158,22 @@ function Install-WithWinget {
     Write-Host ""
 
     if ($LASTEXITCODE -ne 0) {
+        # 0x8A15001B = package already installed, no update available
+        if ($LASTEXITCODE -eq -1978335189) {
+            Write-Ok "Package is already installed and up to date"
+
+            # Find existing path from snapshot
+            $existingPaths = $before.Keys | Select-Object -First 1
+            if ($existingPaths) {
+                $tmpDir = "$env:USERPROFILE\.jdm\tmp"
+                if (-not (Test-Path $tmpDir)) {
+                    New-Item -ItemType Directory $tmpDir -Force | Out-Null
+                }
+                Set-Content "$tmpDir\last_install_path.txt" $existingPaths
+            }
+
+            return $true
+        }
         Write-Fail "winget install failed with exit code $LASTEXITCODE"
         return $false
     }
