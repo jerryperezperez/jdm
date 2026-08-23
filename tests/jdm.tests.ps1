@@ -8,6 +8,7 @@ Describe "jdm Tests" {
         function Invoke-Use { param($Key) }
         function Invoke-List { }
         function Invoke-Uninstall { param($Key) }
+        function Invoke-UninstallAll { }
 
         # Dot-source the REAL file to track coverage
         # Ensure your jdm.ps1 has the 'if ($MyInvocation.InvocationName -ne ".")' guard!
@@ -115,6 +116,14 @@ Describe "jdm Tests" {
             Invoke-Jdm -command "uninstall" -rest @("--self")
 
             Should -Invoke Invoke-SelfUninstall -Times 1
+        }
+
+        It "routes 'uninstall --all-vendors' to Invoke-UninstallAll" {
+            Mock Invoke-UninstallAll { }
+
+            Invoke-Jdm -command "uninstall" -rest @("--all-vendors")
+
+            Should -Invoke Invoke-UninstallAll -Times 1
         }
 
         It "shows error for unknown commands" {

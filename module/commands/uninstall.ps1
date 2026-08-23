@@ -6,6 +6,7 @@
 
 . "$PSScriptRoot\..\core\registry.ps1"
 . "$PSScriptRoot\..\core\symlink.ps1"
+. "$PSScriptRoot\..\core\winget.ps1"
 
 # ── Main uninstall entry point ────────────────────────────────
 # Input: version key e.g. "temurin.21" (dot format preferred, hyphen accepted for backward compat)
@@ -160,4 +161,155 @@ function Invoke-Uninstall {
     Write-Host ""
     Write-Host "  [OK] '$Key' has been removed." -ForegroundColor Green
     Write-Host ""
+}
+
+# ── Vendor directory cleanup helper ─────────────────────────
+# Removes the vendor directory (parent of a JDK path) when no other
+# java.exe-bearing, non-IDE subdirectory remains. Never recurses
+# above the vendor directory.
+function Remove-EmptyVendorDir {
+    param(
+        [Parameter(Mandatory)] [string] $JdkPath
+    )
+
+    $vendorDir = Split-Path $JdkPath -Parent
+    if (-not (Test-Path $vendorDir)) { return }
+
+    $keep = $false
+    $children = Get-ChildItem -Path $vendorDir -Directory -ErrorAction SilentlyContinue
+    foreach ($child in $children) {
+        $javaExe = Join-Path $child.FullName "bin\java.exe"
+        if (Test-Path $javaExe -ErrorAction SilentlyContinue) {
+            if (-not (Test-IsIdeRuntime -Path $child.FullName)) {
+                $keep = $true
+                break
+            }
+        }
+    }
+
+    if (-not $keep) {
+        try {
+            Remove-Item $vendorDir -Recurse -Force
+            Write-Ok "Removed empty vendor directory: $vendorDir"
+        }
+        catch {
+            Write-Fail "Failed to remove vendor directory $vendorDir : $_"
+        }
+    }
+}
+
+# ── Bulk uninstall of all tracked JDKs ──────────────────────
+# Returns the number of failed removals (0 = success).
+function Invoke-UninstallAll {
+    $entries = @(Get-AllVersions)
+
+    if ($entries.Count -eq 0) {
+        Write-Host ""
+        Write-Host "  No JDKs are currently installed." -ForegroundColor Gray
+        Write-Host ""
+        return 0
+    }
+
+    Write-Host ""
+    Write-Host "  This will remove all $($entries.Count) tracked JDK(s)." -ForegroundColor Yellow
+    Write-Host ""
+    $confirm = Read-Host "  Remove all $($entries.Count) JDK(s)? (y/n)"
+    if ($confirm -ne "y") {
+        Write-Step "Bulk uninstall cancelled."
+        Write-Host ""
+        return 0
+    }
+
+    $failures = @()
+    $removedCount = 0
+
+    foreach ($entry in $entries) {
+        $entryFailed = $false
+        $entryReason = ""
+
+        Write-Title "Removing $($entry.key)"
+
+        # 1. Uninstall via winget (best-effort)
+        $ok = $false
+        try {
+            $ok = Uninstall-WithWinget -Id $entry.id
+        }
+        catch {
+            $ok = $false
+        }
+        if (-not $ok) {
+            $entryFailed = $true
+            $entryReason = "winget uninstall failed or winget unavailable"
+        }
+
+        # 2. Remove files from disk (best-effort)
+        if ($entry.path -and (Test-Path $entry.path)) {
+            try {
+                Remove-Item $entry.path -Recurse -Force
+            }
+            catch {
+                if (-not $entryFailed) {
+                    $entryFailed = $true
+                    $entryReason = "failed to remove files: $_"
+                }
+            }
+        }
+        elseif ($entry.path -and -not (Test-Path $entry.path)) {
+            Write-Step "Files already missing from disk for $($entry.key)."
+        }
+
+        # 3. Remove registry entry (best-effort)
+        $removed = $false
+        try {
+            $removed = Remove-Version -Key $entry.key
+        }
+        catch {
+            $removed = $false
+        }
+        if (-not $removed) {
+            if (-not $entryFailed) {
+                $entryFailed = $true
+                $entryReason = "failed to remove registry entry"
+            }
+        }
+
+        if (-not $entryFailed) {
+            $removedCount++
+        }
+        else {
+            $failures += [PSCustomObject]@{
+                key    = $entry.key
+                id     = $entry.id
+                reason = $entryReason
+            }
+        }
+
+        # Vendor dir cleanup (after removing this JDK's folder)
+        if ($entry.path) {
+            Remove-EmptyVendorDir -JdkPath $entry.path
+        }
+    }
+
+    # Clear active version/symlink when nothing remains
+    $remaining = @(Get-AllVersions)
+    if ($remaining.Count -eq 0) {
+        Remove-CurrentSymlink
+        Write-Host ""
+        Write-Host "  [!] No active Java version set." -ForegroundColor Yellow
+        Write-Host "  Run 'jdm install temurin.21' to install a new version." -ForegroundColor Cyan
+    }
+
+    # Summary
+    Write-Host ""
+    Write-Host "  [DONE] Removed $removedCount of $($entries.Count) JDK(s)." -ForegroundColor Green
+    if ($failures.Count -gt 0) {
+        Write-Host ""
+        Write-Host "  The following removals had issues:" -ForegroundColor Red
+        foreach ($f in $failures) {
+            Write-Host "    $($f.key) (id: $($f.id)) - $($f.reason)" -ForegroundColor Red
+        }
+    }
+    Write-Host ""
+
+    return $failures.Count
 }

@@ -97,6 +97,9 @@ jdm list
 # Remove a version
 jdm uninstall corretto.17
 
+# Remove ALL installed JDKs (bulk, prompts for confirmation)
+jdm uninstall --all-vendors
+
 # Remove jdm itself
 jdm uninstall --self
 

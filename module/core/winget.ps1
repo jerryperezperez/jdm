@@ -101,17 +101,10 @@ function Get-RegistryKey {
     return "$vendor.$version"
 }
 
-# ── Snapshot all java.exe paths currently on disk ────────────
-function Get-JavaSnapshot {
-    $searchRoots = @(
-        "$env:ProgramFiles",
-        "${env:ProgramFiles(x86)}",
-        "$env:LOCALAPPDATA",
-        "$env:APPDATA"
-    )
-
+# ── Shared IDE exclude helpers (DRY: reused by snapshot + cleanup) ──
+function Get-IdeExcludePatterns {
     # Paths to exclude (IDE bundled runtimes)
-    $excludePatterns = @(
+    return @(
         "IntelliJ",
         "PyCharm",
         "WebStorm",
@@ -125,6 +118,30 @@ function Get-JavaSnapshot {
         "\jbr",
         "\jre"
     )
+}
+
+function Test-IsIdeRuntime {
+    param(
+        [Parameter(Mandatory)] [string] $Path
+    )
+
+    foreach ($pattern in (Get-IdeExcludePatterns)) {
+        if ($Path -like "*$pattern*") {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+# ── Snapshot all java.exe paths currently on disk ────────────
+function Get-JavaSnapshot {
+    $searchRoots = @(
+        "$env:ProgramFiles",
+        "${env:ProgramFiles(x86)}",
+        "$env:LOCALAPPDATA",
+        "$env:APPDATA"
+    )
 
     $snapshot = @{}
 
@@ -136,14 +153,7 @@ function Get-JavaSnapshot {
             $jdkRoot = $hit.Directory.Parent.FullName
 
             # Skip IDE bundled JBRs
-            $isExcluded = $false
-            foreach ($pattern in $excludePatterns) {
-                if ($jdkRoot -like "*$pattern*") {
-                    $isExcluded = $true
-                    break
-                }
-            }
-            if ($isExcluded) { continue }
+            if (Test-IsIdeRuntime -Path $jdkRoot) { continue }
 
             $snapshot[$jdkRoot] = $true
         }
@@ -225,5 +235,36 @@ function Install-WithWinget {
     }
     Set-Content "$tmpDir\last_install_path.txt" $realPath
 
+    return $true
+}
+
+# ── Uninstall a package via winget ──────────────────────────
+function Uninstall-WithWinget {
+    param(
+        [Parameter(Mandatory)] [string] $Id
+    )
+
+    # Check if winget is available
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Fail "winget is not installed or not in PATH"
+        Write-Host "      Please install App Installer from Microsoft Store" -ForegroundColor Yellow
+        return $false
+    }
+
+    Write-Step "Uninstalling $Id via winget..."
+
+    $proc = Start-Process -FilePath "winget" `
+        -ArgumentList @("uninstall", $Id,
+            "--silent",
+            "--accept-package-agreements",
+            "--accept-source-agreements") `
+        -Wait -PassThru
+
+    if ($proc.ExitCode -ne 0) {
+        Write-Fail "winget uninstall failed with exit code $($proc.ExitCode)"
+        return $false
+    }
+
+    Write-Ok "Winget uninstall completed"
     return $true
 }
