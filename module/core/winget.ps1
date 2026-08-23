@@ -143,23 +143,20 @@ function Install-WithWinget {
     Write-Step "Scanning existing Java installations..."
     $before = Get-JavaSnapshot
 
-    # Install without --silent to show progress; agreement flags prevent prompts
-    Write-Host ""
-    Write-Host "      --- winget ---" -ForegroundColor DarkGray
-
-    & winget install $Id `
-        --source winget `
-        --accept-package-agreements `
-        --accept-source-agreements 2>&1 | ForEach-Object {
-        Write-Host "      $_" -ForegroundColor DarkGray
-    }
-
-    Write-Host "      --- end ---" -ForegroundColor DarkGray
+    # Install in a dedicated terminal so winget shows progress bars properly
+    Write-Step "Launching winget installer..."
     Write-Host ""
 
-    if ($LASTEXITCODE -ne 0) {
+    $proc = Start-Process -FilePath "winget" `
+        -ArgumentList @("install", $Id,
+            "--source", "winget",
+            "--accept-package-agreements",
+            "--accept-source-agreements") `
+        -Wait -PassThru
+
+    if ($proc.ExitCode -ne 0) {
         # 0x8A15001B = package already installed, no update available
-        if ($LASTEXITCODE -eq -1978335189) {
+        if ($proc.ExitCode -eq -1978335189) {
             Write-Ok "Package is already installed and up to date"
 
             # Find existing path from snapshot
@@ -174,7 +171,7 @@ function Install-WithWinget {
 
             return $true
         }
-        Write-Fail "winget install failed with exit code $LASTEXITCODE"
+        Write-Fail "winget install failed with exit code $($proc.ExitCode)"
         return $false
     }
 
