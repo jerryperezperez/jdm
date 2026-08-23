@@ -143,16 +143,16 @@ function Install-WithWinget {
     Write-Step "Scanning existing Java installations..."
     $before = Get-JavaSnapshot
 
-    # Install with --disable-interactivity to show progress but prevent prompts
-    # Stream output through Tee-Object for real-time display
+    # Install without --silent to show progress; agreement flags prevent prompts
     Write-Host ""
     Write-Host "      ── winget ──" -ForegroundColor DarkGray
 
     & winget install $Id `
         --source winget `
         --accept-package-agreements `
-        --accept-source-agreements `
-        --disable-interactivity 2>&1 | Tee-Object -Variable wingetOutput
+        --accept-source-agreements 2>&1 | ForEach-Object {
+        Write-Host "      $_" -ForegroundColor DarkGray
+    }
 
     Write-Host "      ── end ──" -ForegroundColor DarkGray
     Write-Host ""
@@ -160,13 +160,6 @@ function Install-WithWinget {
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "winget install failed with exit code $LASTEXITCODE"
         return $false
-    }
-
-    # Stream output to display
-    if ($wingetOutput) {
-        $wingetOutput | ForEach-Object {
-            Write-Host "      $_" -ForegroundColor DarkGray
-        }
     }
 
     Write-Ok "Winget install completed"
