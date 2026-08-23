@@ -1,6 +1,23 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "skills": { "paths": [".agents/skills"] },
-  "instructions": ["src/main/java/AGENTS.md"]
+  "instructions": ["src/main/java/AGENTS.md"],
+  "mcp": {
+    "github": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+      "environment": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_TOKEN_HERE"
+      }
+    },
+    "sonarqube": {
+      "type": "local",
+      "command": ["docker", "run", "--init", "--pull=always", "-i", "--rm", "-e", "SONARQUBE_TOKEN", "-e", "SONARQUBE_ORG", "sonarsource/sonarqube-mcp"],
+      "environment": {
+        "SONARQUBE_TOKEN": "YOUR_TOKEN_HERE",
+        "SONARQUBE_ORG": "gapp-labs"
+      }
+    }
+  }
 }
 

@@ -167,6 +167,18 @@ jdm/
 
 ---
 
+## Building the Executable
+
+To build the standalone `.exe` locally:
+
+```powershell
+Install-Module -Name PS2EXE -Scope CurrentUser -Force
+New-Item -ItemType Directory -Path .\dist -Force
+Invoke-PS2EXE -InputFile .\module\jdm.ps1 -OutputFile .\dist\jdm.exe -noConsole
+```
+
+---
+
 ## License
 
 [GNU Affero General Public License v3.0](./LICENSE)
