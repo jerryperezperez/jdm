@@ -143,8 +143,6 @@ function Get-JavaSnapshot {
         "$env:APPDATA"
     )
 
-    $excludePatterns = Get-IdeExcludePatterns
-
     $snapshot = @{}
 
     foreach ($root in $searchRoots) {
