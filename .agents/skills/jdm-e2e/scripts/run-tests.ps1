@@ -112,13 +112,13 @@ catch {
 $runtimeSummary = [ordered]@{}
 $runtimeSummary.Mode = $selectedMode
 $runtimeSummary.Timestamp = (Get-Date).ToString('o')
-$runtimeSummary.HasWinget = (Get-Command winget -ErrorAction SilentlyContinue) -ne $null
+$runtimeSummary.HasWinget = $null -ne (Get-Command winget -ErrorAction SilentlyContinue)
 $runtimeSummary.ModuleFilesExist = (@('.\module\jdm.ps1', '.\module\core\symlink.ps1') | ForEach-Object { Test-Path $_ }) -contains $false ? $false : $true
 
 if ($PerformRuntimeChecks) {
     Write-Host "Performing additional runtime checks (may be destructive)" -ForegroundColor Yellow
     # Example non-destructive checks; do not install anything by default
-    $runtimeSummary.WingetAvailable = (Get-Command winget -ErrorAction SilentlyContinue) -ne $null
+    $runtimeSummary.WingetAvailable = $null -ne (Get-Command winget -ErrorAction SilentlyContinue)
     # Placeholder for more advanced runtime checks (install/use/uninstall) - implement with caution
 }
 else {
