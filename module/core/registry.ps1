@@ -133,7 +133,7 @@ function Get-AllVersions {
         $result += $entry
     }
 
-    return ,@($result)
+    return $result
 }
 
 # ── Add a new version to the registry ────────────────────────
@@ -228,8 +228,14 @@ function Remove-Version {
         return $false
     }
 
-    # Remove from versions map
-    $registry.candidates.java.versions.PSObject.Properties.Remove($foundKey)
+    # Remove from versions map by recreating the object without the key
+    $versions = $registry.candidates.java.versions
+    $props = @($versions.PSObject.Properties | Where-Object { $_.Name -ne $foundKey })
+    $newVersions = New-Object PSCustomObject
+    foreach ($p in $props) {
+        $newVersions | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value -Force
+    }
+    $registry.candidates.java.versions = $newVersions
 
     # Remove from installed list (try all forms)
     $installed = [System.Collections.ArrayList]$registry.candidates.java.installed
