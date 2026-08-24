@@ -1,6 +1,6 @@
 <# jdm-e2e skill helper script
 
-This optional helper orchestrates the repo's tools/run-tests.ps1 runner. It is intended to be executed by the external agent/skill runtime.
+This optional helper orchestrates the skill's internal run-tests.ps1 runner. It is intended to be executed by the external agent/skill runtime.
 
 Usage:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\.agents\skills\jdm-e2e\jdm-e2e.ps1 -Mode auto -OutputDir .\artifacts\agent-<ts> [-PerformRuntimeChecks]
@@ -17,13 +17,13 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path -Path (Join-Path $scriptDir '..\..')
 Set-Location -Path $repoRoot
 
-$runner = Join-Path $repoRoot 'tools\run-tests.ps1'
+$runner = Join-Path $scriptDir 'scripts\run-tests.ps1'
 if (-not (Test-Path $runner)) {
-    Write-Error "Runner not found at $runner. Ensure tools/run-tests.ps1 exists in the repository."
+    Write-Error "Runner not found at $runner. Ensure scripts/run-tests.ps1 exists in the skill."
     exit 2
 }
 
-Write-Host "Invoking repository runner: $runner" -ForegroundColor Cyan
+Write-Host "Invoking skill runner: $runner" -ForegroundColor Cyan
 & powershell -NoProfile -ExecutionPolicy Bypass -File $runner -Mode $Mode -PesterConfig '.\pester.configuration.ps1' -OutputDir $OutputDir -PerformRuntimeChecks:$PerformRuntimeChecks | Out-Null
 
 $exitCode = $LASTEXITCODE

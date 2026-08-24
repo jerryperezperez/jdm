@@ -135,13 +135,13 @@ Use this checklist for every run:
 ## Agent helper and integration (added)
 This skill includes a lightweight helper and recommended runner to allow an external agent to invoke a privilege-aware test run without modifying repository source files.
 
-- Recommended repo runner: `tools/run-tests.ps1` (already present in this repo). It:
+- Recommended skill runner: `.agents/skills/jdm-e2e/scripts/run-tests.ps1`. It:
   - Detects privilege level (Administrator | DevModeNonAdmin | NonAdmin)
   - Sets an environment variable (`JDM_TEST_MODE`) so tests can adapt
   - Runs `Invoke-Pester` with the repository's `pester.configuration.ps1` and writes JUnit & JaCoCo outputs to the `coverage/` folder
   - Produces an `agent_summary.json` artifact describing detected privilege, Pester results, and runtime checks
 
-- Optional helper for agents: `.agents/skills/jdm-e2e/jdm-e2e.ps1` — a small orchestrator that calls the runner with the desired mode and output folder.
+- Optional helper for agents: `.agents/skills/jdm-e2e/jdm-e2e.ps1` — a small orchestrator that calls the skill runner with the desired mode and output folder.
 
 Invocation example (agent host):
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\\.agents\\skills\\jdm-e2e\\jdm-e2e.ps1 -Mode auto -OutputDir .\\artifacts\\agent-<ts>`
