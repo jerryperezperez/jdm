@@ -3,7 +3,7 @@ name: jdm-e2e
 description: Runs a full end-to-end validation of the jdm Java version manager, including install, switch, uninstall, bulk removal, and cleanup. Use this when the user wants to exercise all jdm flags in a real Windows environment or leave the machine ready for the next E2E test run.
 ---
 
-# jdm end-to-end validation
+# jdm end-to-end validation (skill)
 
 Use this skill anytime the goal is to exercise the real jdm command surface rather than mocked unit tests. The objective is to validate the actual install/switch/remove lifecycle and then leave the machine clean.
 
@@ -131,3 +131,34 @@ Use this checklist for every run:
 - This skill is intentionally destructive in the final cleanup phase. It should only be used when the user wants a real end-to-end validation run and is okay with state removal.
 - Do not stop after the first successful install; the full value of the test is in the multi-version switching and cleanup path.
 - When the user says "run all the jdm flags" or "walk the full install/switch/remove lifecycle", this is the skill to invoke.
+
+## Agent helper and integration (added)
+This skill includes a lightweight helper and recommended runner to allow an external agent to invoke a privilege-aware test run without modifying repository source files.
+
+- Recommended repo runner: `tools/run-tests.ps1` (already present in this repo). It:
+  - Detects privilege level (Administrator | DevModeNonAdmin | NonAdmin)
+  - Sets an environment variable (`JDM_TEST_MODE`) so tests can adapt
+  - Runs `Invoke-Pester` with the repository's `pester.configuration.ps1` and writes JUnit & JaCoCo outputs to the `coverage/` folder
+  - Produces an `agent_summary.json` artifact describing detected privilege, Pester results, and runtime checks
+
+- Optional helper for agents: `.agents/skills/jdm-e2e/jdm-e2e.ps1` — a small orchestrator that calls the runner with the desired mode and output folder.
+
+Invocation example (agent host):
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\\.agents\\skills\\jdm-e2e\\jdm-e2e.ps1 -Mode auto -OutputDir .\\artifacts\\agent-<ts>`
+
+Artifacts produced by the runner:
+- `artifacts/agent_summary.json` (structured summary)
+- `coverage/test-results.xml` (JUnit)
+- `coverage/coverage.xml` (JaCoCo)
+- runner log (plain text)
+
+Notes for implementers
+- The skill should not hard-modify repository source files. It should run tests and runtime checks and collect results.
+- For non-admin checks that cannot be run on the agent host (e.g., symlink creation blocked by platform policies), the skill should document the limitation in `agent_summary.json` and continue with other checks.
+
+Security
+- Do not capture or echo secrets (tokens) present in `opencode.json` or environment variables.
+
+Test tagging guidance
+- To help external agents filter tests by privilege, use Pester tags: `AdminOnly`, `DevModeOnly`, `NonAdmin`, `Standard`. Alternatively use the `JDM_TEST_MODE` env var so tests can adapt.
+
