@@ -12,6 +12,22 @@ Use this skill anytime the goal is to exercise the real jdm command surface rath
 - Run from the repository root unless a command explicitly says otherwise.
 - Prefer dot-format version keys such as `temurin.21` and `corretto.21`; hyphen aliases are backward compatible but not the preferred validation form.
 - Treat every step as a deterministic pass/fail gate. Do not proceed until the previous command has been verified.
+- Determine privilege mode before starting the destructive uninstall/cleanup steps:
+  - Normal user mode can handle: installing jdm itself, user-level PATH/JAVA_HOME updates, the jdm registry/user state under `$env:USERPROFILE\.jdm`, and the switch-based validation flow that manipulates the current symlink/junction.
+  - Administrator mode is required for complete removal of JDKs installed under `Program Files` and for final cleanup of machine-level installation artifacts; if admin is unavailable, leave the user-level state clean but mark filesystem removal as blocked/incomplete rather than claiming the full E2E lifecycle passed.
+
+## Privilege rules for this skill
+- Normal mode tasks:
+  - `./install.ps1` for user-level jdm setup
+  - `jdm install ...` and `jdm use ...` for validation within the user-managed jdm state
+  - user PATH / `JAVA_HOME` updates under the current user
+  - final user-level cleanup of `$env:USERPROFILE\.jdm`, `$env:USERPROFILE\.jdks`, and the current Java link/junction under the user profile
+- Admin-required tasks:
+  - deleting JDK directories under `C:\Program Files\...` created by winget
+  - `jdm uninstall <version>` when the target JDK lives in Program Files and removal needs filesystem deletion
+  - `jdm uninstall --all-vendors` when the goal is to leave the machine fully clean and remove all installed vendor directories
+  - machine-level cleanup of any system-installed Java artifacts that require elevated permissions
+- If the task asks for the full install/switch/remove lifecycle, the skill should attempt the normal-user steps first and then explicitly stop at the admin-only steps if elevated permissions are not available. Report the blocker with the exact command and the files/directories that remain.
 
 ## Required end-to-end flow
 
