@@ -1,0 +1,117 @@
+---
+name: jdm-e2e
+description: Runs a full end-to-end validation of the jdm Java version manager, including install, switch, uninstall, bulk removal, and cleanup. Use this when the user wants to exercise all jdm flags in a real Windows environment or leave the machine ready for the next E2E test run.
+---
+
+# jdm end-to-end validation
+
+Use this skill anytime the goal is to exercise the real jdm command surface rather than mocked unit tests. The objective is to validate the actual install/switch/remove lifecycle and then leave the machine clean.
+
+## Preconditions
+- Run on Windows with PowerShell and `winget` available.
+- Run from the repository root unless a command explicitly says otherwise.
+- Prefer dot-format version keys such as `temurin.21` and `corretto.21`; hyphen aliases are backward compatible but not the preferred validation form.
+- Treat every step as a deterministic pass/fail gate. Do not proceed until the previous command has been verified.
+
+## Required end-to-end flow
+
+### 1. Install jdm itself
+1. Run `./install.ps1` from the repo root.
+2. Verify the install completed without error and the launcher is available.
+3. Confirm `jdm version` or `jdm help` prints the expected version banner.
+4. If the command fails, stop and report the blocker.
+
+Expected checks:
+- `jdm` resolves on PATH
+- `jdm version` prints a version number
+- The user-level install directory exists under `$env:USERPROFILE\.jdm`
+
+### 2. Install multiple JDKs to exercise switching
+Install at least three distinct JDKs so real switching is actually exercised. Use a realistic matrix such as:
+- `jdm install temurin.21`
+- `jdm install corretto.21`
+- `jdm install azul.26`
+
+For each install:
+1. Confirm the command exits successfully.
+2. Check `jdm list` includes the installed version.
+3. Confirm the version path exists on disk.
+4. Confirm the current version is active and the `java -version` output matches that vendor/version.
+
+Expected checks:
+- `jdm list` includes each installed version
+- `Test-Path` for the installed JDK root returns true
+- `java -version` output matches the expected vendor and version after activation
+
+### 3. Switch among installed versions
+Run a switching loop to validate the active symlink and environment update flow:
+1. `jdm use temurin.21`
+2. `java -version` should show Temurin 21
+3. `jdm use corretto.21`
+4. `java -version` should show Amazon Corretto 21
+5. `jdm use azul.26`
+6. `java -version` should show Azul Zulu 26
+7. Return to the version you want as the final active state before uninstall tests
+
+Expected checks:
+- The active symlink target changes to the selected JDK path
+- `JAVA_HOME` points to the selected version
+- `PATH` resolves `java` and `javac` from the selected JDK
+
+### 4. Uninstall a single JDK and verify removal
+Pick one of the installed versions and remove it:
+- `jdm uninstall corretto.21`
+
+Then validate:
+1. The command exits without error.
+2. The target directory is removed from the JDK install location.
+3. The uninstall target is no longer listed in `jdm list`.
+4. `java -version` no longer resolves to the removed JDK if it was the active version.
+
+Expected checks:
+- `Test-Path <removed-dir>` returns false
+- `jdm list` does not include the removed version
+- The registry does not contain the removed version key
+
+### 5. Remove all installed vendors
+Run the bulk removal flow:
+- `jdm uninstall --all-vendors`
+
+Then validate:
+1. The command prompts for confirmation and proceeds only when approved.
+2. All JDKs are removed from the filesystem.
+3. `jdm list` shows no installed versions.
+4. The registry `installed` list is empty or the registry state is effectively clean.
+
+Expected checks:
+- no JDK directories remain under the user install root
+- registry contains no active version
+- the active Java symlink/current path is absent or points nowhere
+
+### 6. Final cleanup for the next E2E run
+At the end of the validation flow, ensure the machine is left in a clean state for the next run.
+
+Required cleanup steps:
+- Remove the user-level jdm state directory: `$env:USERPROFILE\.jdm`
+- Remove any leftover JDK installation directories under `$env:USERPROFILE\.jdks`
+- Remove the active Java symlink/current link if it still exists
+- Remove any PATH entries that were added for jdm/JAVA_HOME during the run
+- Clear `JAVA_HOME` in the user environment if it was set by the test flow
+
+If the environment is intentionally left as a real installation for future work, document that explicitly. Otherwise, the skill should finish by fully cleaning the environment.
+
+## Deterministic pass/fail checklist
+Use this checklist for every run:
+- [ ] `./install.ps1` succeeded
+- [ ] `jdm version` or `jdm help` succeeded
+- [ ] Three JDKs were installed and appear in `jdm list`
+- [ ] `jdm use` successfully switched active Java between versions
+- [ ] `java -version` matched the selected vendor/version each time
+- [ ] A single JDK uninstall removed the JDK and the directory no longer exists
+- [ ] Bulk uninstall removed all JDKs and left the list empty
+- [ ] Final cleanup removed `~/.jdm`, `~/.jdks`, and environment changes
+
+## Important behavior notes
+- This skill is intentionally destructive in the final cleanup phase. It should only be used when the user wants a real end-to-end validation run and is okay with state removal.
+- Do not stop after the first successful install; the full value of the test is in the multi-version switching and cleanup path.
+- When the user says "run all the jdm flags" or "walk the full install/switch/remove lifecycle", this is the skill to invoke.
