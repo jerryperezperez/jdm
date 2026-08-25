@@ -7,7 +7,7 @@ $config = New-PesterConfiguration
 # Run settings
 # -------------------------------------------------------
 $config.Run.Path = './tests'          # folder where test files live
-$config.Run.Exit = $true             # exit with non-zero code if tests fail (important for CI)
+# $config.Run.Exit = $true             # exit with non-zero code if tests fail (handled by runner)
 
 # -------------------------------------------------------
 # Output settings

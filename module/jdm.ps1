@@ -51,6 +51,10 @@ function Show-Help {
 }
 
 function Invoke-SelfUninstall {
+    param(
+        [switch] $Force
+    )
+
     Write-Host ""
     Write-Host "  This will remove jdm and all its files from your machine." -ForegroundColor Yellow
     Write-Host ""
@@ -64,7 +68,7 @@ function Invoke-SelfUninstall {
     Write-Host "    - Machine level PATH entries (requires manual Admin cleanup)" -ForegroundColor Gray
     Write-Host ""
 
-    $confirm = Read-Host "  Are you sure you want to uninstall jdm? (y/n)"
+    $confirm = if ($Force) { "y" } else { Read-Host "  Are you sure you want to uninstall jdm? (y/n)" }
     if ($confirm -ne "y") {
         Write-Step "Uninstall cancelled."
         return
@@ -112,6 +116,10 @@ function Invoke-Jdm {
         [string[]]$rest
     )
 
+    # Check for -Force flag in rest
+    $force = $rest -contains "-Force"
+    $rest = $rest | Where-Object { $_ -ne "-Force" }
+
     switch ($command) {
 
         "install" {
@@ -120,7 +128,7 @@ function Invoke-Jdm {
                 Write-Host "  Example: jdm install temurin.21" -ForegroundColor Cyan
             }
             else {
-                Invoke-Install -UserInput $rest[0]
+                Invoke-Install -UserInput $rest[0] -Force:$force
             }
         }
 
@@ -144,13 +152,13 @@ function Invoke-Jdm {
                 Write-Host "  Example: jdm uninstall temurin.21" -ForegroundColor Cyan
             }
             elseif ($rest[0] -eq "--self") {
-                Invoke-SelfUninstall
+                Invoke-SelfUninstall -Force:$force
             }
             elseif ($rest[0] -eq "--all-vendors") {
-                Invoke-UninstallAll
+                Invoke-UninstallAll -Force:$force
             }
             else {
-                Invoke-Uninstall -Key $rest[0]
+                Invoke-Uninstall -Key $rest[0] -Force:$force
             }
         }
 

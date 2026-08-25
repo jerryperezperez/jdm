@@ -7,7 +7,8 @@
 
 function Invoke-Install {
     param(
-        [Parameter(Mandatory)] [string] $UserInput
+        [Parameter(Mandatory)] [string] $UserInput,
+        [switch] $Force
     )
 
     Write-Title "jdm install $UserInput"
@@ -36,7 +37,7 @@ function Invoke-Install {
     }
 
     # Step 3: Let user pick if multiple results
-    $selected = Select-Result -Results $jdkResults
+    $selected = Select-Result -Results $jdkResults -Force:$Force
 
     if (-not $selected) {
         Write-Step "Installation cancelled."
@@ -49,7 +50,7 @@ function Invoke-Install {
     if (Test-VersionInstalled -Key $key) {
         Write-Host ""
         Write-Host "  [!] '$key' is already installed." -ForegroundColor Yellow
-        $confirm = Read-Host "  Reinstall? (y/n)"
+        if ($Force) { $confirm = "y" } else { $confirm = Read-Host "  Reinstall? (y/n)" }
         if ($confirm -ne "y") {
             Write-Step "Skipping install."
             return
@@ -62,7 +63,7 @@ function Invoke-Install {
     Write-Host "  ID      : $($selected.Id)"   -ForegroundColor White
     Write-Host ""
 
-    $confirm = Read-Host "  Proceed with install? (y/n)"
+    $confirm = if ($Force) { "y" } else { Read-Host "  Proceed with install? (y/n)" }
     if ($confirm -ne "y") {
         Write-Step "Installation cancelled."
         return
@@ -118,7 +119,7 @@ function Invoke-Install {
     }
     else {
         Write-Host ""
-        $switchAnswer = Read-Host "  Set '$key' as current version? (y/n)"
+        $switchAnswer = if ($Force) { "y" } else { Read-Host "  Set '$key' as current version? (y/n)" }
         $shouldSwitch = ($switchAnswer -eq "y")
     }
 
@@ -157,10 +158,15 @@ function Invoke-Install {
 
 function Select-Result {
     param(
-        [Parameter(Mandatory)] [array] $Results
+        [Parameter(Mandatory)] [array] $Results,
+        [switch] $Force
     )
 
     if ($Results.Count -eq 1) {
+        return $Results[0]
+    }
+
+    if ($Force) {
         return $Results[0]
     }
 
