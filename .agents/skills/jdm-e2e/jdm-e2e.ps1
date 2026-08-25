@@ -14,7 +14,7 @@ param(
 
 # Ensure we are running from repository root
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = Resolve-Path -Path (Join-Path $scriptDir '..\..')
+$repoRoot = Resolve-Path -Path (Join-Path $scriptDir '..\..\..')
 Set-Location -Path $repoRoot
 
 $runner = Join-Path $scriptDir 'scripts\run-tests.ps1'
@@ -24,7 +24,10 @@ if (-not (Test-Path $runner)) {
 }
 
 Write-Host "Invoking skill runner: $runner" -ForegroundColor Cyan
-& powershell -NoProfile -ExecutionPolicy Bypass -File $runner -Mode $Mode -PesterConfig '.\pester.configuration.ps1' -OutputDir $OutputDir -PerformRuntimeChecks:$PerformRuntimeChecks | Out-Null
+$pesterConfigPath = (Join-Path $repoRoot 'pester.configuration.ps1')
+$runnerArgs = @('-Mode', $Mode, '-PesterConfig', $pesterConfigPath, '-OutputDir', $OutputDir)
+if ($PerformRuntimeChecks) { $runnerArgs += '-PerformRuntimeChecks' }
+& powershell -NoProfile -ExecutionPolicy Bypass -File $runner @runnerArgs | Out-Null
 
 $exitCode = $LASTEXITCODE
 if ($exitCode -ne 0) {

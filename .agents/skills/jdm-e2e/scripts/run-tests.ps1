@@ -113,7 +113,8 @@ $runtimeSummary = [ordered]@{}
 $runtimeSummary.Mode = $selectedMode
 $runtimeSummary.Timestamp = (Get-Date).ToString('o')
 $runtimeSummary.HasWinget = $null -ne (Get-Command winget -ErrorAction SilentlyContinue)
-$runtimeSummary.ModuleFilesExist = (@('.\module\jdm.ps1', '.\module\core\symlink.ps1') | ForEach-Object { Test-Path $_ }) -contains $false ? $false : $true
+$moduleFilesExist = @('.\module\jdm.ps1', '.\module\core\symlink.ps1') | ForEach-Object { Test-Path $_ }
+$runtimeSummary.ModuleFilesExist = -not ($moduleFilesExist -contains $false)
 
 if ($PerformRuntimeChecks) {
     Write-Host "Performing additional runtime checks (may be destructive)" -ForegroundColor Yellow

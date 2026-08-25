@@ -1,0 +1,11 @@
+﻿{
+    "detectedPrivilege":  "DevModeNonAdmin",
+    "selectedMode":  "DevModeNonAdmin",
+    "pesterResult":  null,
+    "runtime":  {
+                    "Mode":  "DevModeNonAdmin",
+                    "Timestamp":  "2026-08-24T16:05:36.8428830-06:00",
+                    "HasWinget":  true,
+                    "ModuleFilesExist":  true
+                }
+}
