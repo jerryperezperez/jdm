@@ -102,10 +102,11 @@ if (-not (Test-Path $PesterConfig)) {
 Write-Host "Running Pester tests (config: $PesterConfig)..." -ForegroundColor Green
 try {
     # Running Pester and letting the project's configuration handle JUnit/coverage outputs
-    Invoke-Pester -Configuration $PesterConfig -PassThru | Tee-Object -Variable pesterResult | Out-Null
+    $pesterResult = Invoke-Pester -Configuration $PesterConfig -PassThru
 }
 catch {
     Write-Warning "Invoke-Pester threw an error: $_"
+    $pesterResult = $null
 }
 
 # minimal non-destructive runtime checks

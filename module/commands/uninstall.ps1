@@ -12,7 +12,8 @@
 # Input: version key e.g. "temurin.21" (dot format preferred, hyphen accepted for backward compat)
 function Invoke-Uninstall {
     param(
-        [Parameter(Mandatory)] [string] $Key
+        [Parameter(Mandatory)] [string] $Key,
+        [switch] $Force
     )
 
     # ADR-0001: Normalize to dot format for consistent internal handling
@@ -60,7 +61,7 @@ function Invoke-Uninstall {
             Write-Host "  This is the only installed version." -ForegroundColor Yellow
             Write-Host "  Removing it will leave you with no active Java." -ForegroundColor Yellow
             Write-Host ""
-            $confirm = Read-Host "  Are you sure? (y/n)"
+            $confirm = if ($Force) { "y" } else { Read-Host "  Are you sure? (y/n)" }
             if ($confirm -ne "y") {
                 Write-Step "Uninstall cancelled."
                 return
@@ -76,7 +77,7 @@ function Invoke-Uninstall {
             }
 
             Write-Host ""
-            $choice = Read-Host "  Which one? (1-$($others.Count)) or 'q' to cancel"
+            $choice = if ($Force) { "1" } else { Read-Host "  Which one? (1-$($others.Count)) or 'q' to cancel" }
 
             if ($choice -eq "q") {
                 Write-Step "Uninstall cancelled."
@@ -98,7 +99,7 @@ function Invoke-Uninstall {
         Write-Host "  Package : $($entry.vendor) $($entry.version)" -ForegroundColor White
         Write-Host "  Path    : $($entry.path)" -ForegroundColor White
         Write-Host ""
-        $confirm = Read-Host "  Remove '$Key'? (y/n)"
+        $confirm = if ($Force) { "y" } else { Read-Host "  Remove '$Key'? (y/n)" }
         if ($confirm -ne "y") {
             Write-Step "Uninstall cancelled."
             return
@@ -121,6 +122,21 @@ function Invoke-Uninstall {
     }
     else {
         Write-Step "Files already missing from disk, cleaning up registry only."
+    }
+
+    # ── Step 4b: Uninstall via winget (best-effort) ───────────
+    Write-Step "Uninstalling $($entry.id) via winget..."
+    try {
+        $wingetOk = Uninstall-WithWinget -Id $entry.id
+        if ($wingetOk) {
+            Write-Ok "Winget uninstall completed"
+        }
+        else {
+            Write-Step "Winget uninstall reported failure (non-fatal)"
+        }
+    }
+    catch {
+        Write-Step "Winget uninstall error (non-fatal): $_"
     }
 
     # ── Step 5: Remove from registry ─────────────────────────
@@ -201,6 +217,10 @@ function Remove-EmptyVendorDir {
 # ── Bulk uninstall of all tracked JDKs ──────────────────────
 # Returns the number of failed removals (0 = success).
 function Invoke-UninstallAll {
+    param(
+        [switch] $Force
+    )
+
     $entries = @(Get-AllVersions)
 
     if ($entries.Count -eq 0) {
@@ -213,7 +233,7 @@ function Invoke-UninstallAll {
     Write-Host ""
     Write-Host "  This will remove all $($entries.Count) tracked JDK(s)." -ForegroundColor Yellow
     Write-Host ""
-    $confirm = Read-Host "  Remove all $($entries.Count) JDK(s)? (y/n)"
+    $confirm = if ($Force) { "y" } else { Read-Host "  Remove all $($entries.Count) JDK(s)? (y/n)" }
     if ($confirm -ne "y") {
         Write-Step "Bulk uninstall cancelled."
         Write-Host ""

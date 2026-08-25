@@ -46,7 +46,7 @@ Expected checks:
 Install at least three distinct JDKs so real switching is actually exercised. Use a realistic matrix such as:
 - `jdm install temurin.21`
 - `jdm install corretto.21`
-- `jdm install azul.26`
+- `jdm install azul.21`
 
 For each install:
 1. Confirm the command exits successfully.
@@ -65,8 +65,8 @@ Run a switching loop to validate the active symlink and environment update flow:
 2. `java -version` should show Temurin 21
 3. `jdm use corretto.21`
 4. `java -version` should show Amazon Corretto 21
-5. `jdm use azul.26`
-6. `java -version` should show Azul Zulu 26
+5. `jdm use azul.21`
+6. `java -version` should show Azul Zulu 21
 7. Return to the version you want as the final active state before uninstall tests
 
 Expected checks:
@@ -83,11 +83,17 @@ Then validate:
 2. The target directory is removed from the JDK install location.
 3. The uninstall target is no longer listed in `jdm list`.
 4. `java -version` no longer resolves to the removed JDK if it was the active version.
+5. **Reinstall the same version** to validate winget integration (Option b):
+   - `jdm install corretto.21`
+   - Verify registry has the key, path exists on disk, and `java -version` matches.
 
 Expected checks:
 - `Test-Path <removed-dir>` returns false
 - `jdm list` does not include the removed version
 - The registry does not contain the removed version key
+- After reinstall: registry has key, path exists, `java -version` matches vendor/version
+
+**Note:** Single uninstall now calls `winget uninstall` (Option b), so reinstall works without hitting winget's "already installed" branch.
 
 ### 5. Remove all installed vendors
 Run the bulk removal flow:
@@ -120,10 +126,11 @@ If the environment is intentionally left as a real installation for future work,
 Use this checklist for every run:
 - [ ] `./install.ps1` succeeded
 - [ ] `jdm version` or `jdm help` succeeded
-- [ ] Three JDKs were installed and appear in `jdm list`
+- [ ] Three JDKs were installed and appear in `jdm list` (temurin.21, corretto.21, azul.21)
 - [ ] `jdm use` successfully switched active Java between versions
 - [ ] `java -version` matched the selected vendor/version each time
 - [ ] A single JDK uninstall removed the JDK and the directory no longer exists
+- [ ] **Reinstall of single-uninstalled JDK works** (validates Option b winget integration)
 - [ ] Bulk uninstall removed all JDKs and left the list empty
 - [ ] Final cleanup removed `~/.jdm`, `~/.jdks`, and environment changes
 
@@ -131,10 +138,13 @@ Use this checklist for every run:
 - This skill is intentionally destructive in the final cleanup phase. It should only be used when the user wants a real end-to-end validation run and is okay with state removal.
 - Do not stop after the first successful install; the full value of the test is in the multi-version switching and cleanup path.
 - When the user says "run all the jdm flags" or "walk the full install/switch/remove lifecycle", this is the skill to invoke.
+- **Non-interactive mode:** All commands support `-Force` flag to skip prompts (e.g., `jdm install temurin.21 -Force`). The E2E runner uses this for fully automated execution.
+- **Single uninstall + winget:** `jdm uninstall <key>` now calls `winget uninstall` (Option b), ensuring reinstall works correctly without hitting winget's "already installed" branch.
 
-## Agent helper and integration (added)
-This skill includes a lightweight helper and recommended runner to allow an external agent to invoke a privilege-aware test run without modifying repository source files.
+## Agent helper and integration
+This skill includes a lightweight helper and recommended runners to allow an external agent to invoke a privilege-aware test run without modifying repository source files.
 
+### Unit Test Runner (Pester)
 - Recommended skill runner: `.agents/skills/jdm-e2e/scripts/run-tests.ps1`. It:
   - Detects privilege level (Administrator | DevModeNonAdmin | NonAdmin)
   - Sets an environment variable (`JDM_TEST_MODE`) so tests can adapt
@@ -144,7 +154,7 @@ This skill includes a lightweight helper and recommended runner to allow an exte
 - Optional helper for agents: `.agents/skills/jdm-e2e/jdm-e2e.ps1` — a small orchestrator that calls the skill runner with the desired mode and output folder.
 
 Invocation example (agent host):
-`powershell -NoProfile -ExecutionPolicy Bypass -File .\\.agents\\skills\\jdm-e2e\\jdm-e2e.ps1 -Mode auto -OutputDir .\\artifacts\\agent-<ts>`
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\\.agents\\skills\\jdm-e2e\\jdm-e2e.ps1 -Mode auto -OutputDir .\\artifacts\\agent-<ts> [-PerformRuntimeChecks]`
 
 Artifacts produced by the runner:
 - `artifacts/agent_summary.json` (structured summary)
@@ -152,12 +162,16 @@ Artifacts produced by the runner:
 - `coverage/coverage.xml` (JaCoCo)
 - runner log (plain text)
 
-Notes for implementers
-- The skill should not hard-modify repository source files. It should run tests and runtime checks and collect results.
-- For non-admin checks that cannot be run on the agent host (e.g., symlink creation blocked by platform policies), the skill should document the limitation in `agent_summary.json` and continue with other checks.
+### End-to-End Test Runner
+- E2E runner: `.agents/skills/jdm-e2e/scripts/run-e2e.ps1` — executes the full install/switch/uninstall/cleanup lifecycle non-interactively using `-Force`.
+- Optional helper: `.agents/skills/jdm-e2e/jdm-e2e.ps1` with `-PerformE2E` switch.
 
-Security
-- Do not capture or echo secrets (tokens) present in `opencode.json` or environment variables.
+Invocation example (agent host):
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\\.agents\\skills\\jdm-e2e\\jdm-e2e.ps1 -Mode auto -OutputDir .\\artifacts\\e2e-test -PerformE2E`
+
+Artifacts produced by the E2E runner:
+- `artifacts/e2e_summary.json` (structured summary with step-by-step results)
+- Console log output
 
 Test tagging guidance
 - To help external agents filter tests by privilege, use Pester tags: `AdminOnly`, `DevModeOnly`, `NonAdmin`, `Standard`. Alternatively use the `JDM_TEST_MODE` env var so tests can adapt.

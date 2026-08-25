@@ -67,6 +67,7 @@ Describe "Uninstall Command Tests" {
         Mock Read-Host { return "y" }
         Mock Remove-Item { }
         Mock Remove-Version { return $true }
+        Mock Uninstall-WithWinget { return $true }
         Mock Write-Title { }
         Mock Write-Host { }
         Mock Write-Step { }
@@ -78,6 +79,7 @@ Describe "Uninstall Command Tests" {
         Should -Invoke Get-CurrentVersion -Times 1
         Should -Invoke Read-Host -Times 1
         Should -Invoke Remove-Item -Times 1 -ParameterFilter { $Path -eq "C:\Program Files\Java\jdk-21" }
+        Should -Invoke Uninstall-WithWinget -Times 1 -ParameterFilter { $Id -eq "EclipseAdoptium.Temurin.JDK.21" }
         Should -Invoke Remove-Version -Times 1 -ParameterFilter { $Key -eq "temurin.21" }
     }
 
@@ -97,6 +99,7 @@ Describe "Uninstall Command Tests" {
         Mock Read-Host { return "y" }
         Mock Remove-Item { }
         Mock Remove-Version { return $true }
+        Mock Uninstall-WithWinget { return $true }
         Mock Write-Title { }
         Mock Write-Host { }
         Mock Write-Step { }
@@ -105,6 +108,7 @@ Describe "Uninstall Command Tests" {
         Invoke-Uninstall -Key "temurin.21"
 
         Should -Invoke Remove-Item -Times 0
+        Should -Invoke Uninstall-WithWinget -Times 1 -ParameterFilter { $Id -eq "EclipseAdoptium.Temurin.JDK.21" }
         Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -like "*already missing*" }
         Should -Invoke Remove-Version -Times 1
     }
@@ -131,6 +135,7 @@ Describe "Uninstall Command Tests" {
         Mock Read-Host { return "y" }
         Mock Remove-Item { }
         Mock Remove-Version { return $true }
+        Mock Uninstall-WithWinget { return $true }
         Mock Switch-Version { }
         Mock Set-CurrentVersion { }
         Mock Remove-CurrentSymlink { }
@@ -142,6 +147,7 @@ Describe "Uninstall Command Tests" {
         Invoke-Uninstall -Key "temurin-21"
 
         Should -Invoke Remove-Version -Times 1
+        Should -Invoke Uninstall-WithWinget -Times 1 -ParameterFilter { $Id -eq "EclipseAdoptium.Temurin.JDK.21" }
         Should -Invoke Remove-CurrentSymlink -Times 1
         Should -Invoke Switch-Version -Times 0
         Should -Invoke Set-CurrentVersion -Times 0
@@ -162,6 +168,7 @@ Describe "Uninstall Command Tests" {
         Mock Read-Host { return "n" }
         Mock Remove-Item { }
         Mock Remove-Version { }
+        Mock Uninstall-WithWinget { }
         Mock Write-Title { }
         Mock Write-Host { }
         Mock Write-Step { }
@@ -170,6 +177,7 @@ Describe "Uninstall Command Tests" {
 
         Should -Invoke Read-Host -Times 1
         Should -Invoke Remove-Item -Times 0
+        Should -Invoke Uninstall-WithWinget -Times 0
         Should -Invoke Remove-Version -Times 0
         Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -like "*cancelled*" }
     }
@@ -197,6 +205,7 @@ Describe "Uninstall Command Tests" {
         }
         Mock Remove-Item { }
         Mock Remove-Version { }
+        Mock Uninstall-WithWinget { }
         Mock Write-Title { }
         Mock Write-Host { }
         Mock Write-Step { }
@@ -205,6 +214,7 @@ Describe "Uninstall Command Tests" {
 
         Should -Invoke Read-Host -Times 1 -ParameterFilter { $Prompt -like "*Which one*" }
         Should -Invoke Remove-Item -Times 0
+        Should -Invoke Uninstall-WithWinget -Times 0
         Should -Invoke Remove-Version -Times 0
         Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -like "*cancelled*" }
     }
