@@ -82,6 +82,23 @@ function Invoke-SelfUninstall {
 
     Write-Step "Removing JAVA_HOME..."
     [Environment]::SetEnvironmentVariable("JAVA_HOME", $null, "User")
+    $env:JAVA_HOME = $null
+
+    $currentPrincipal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    $isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $jdmCurrentPath = "$env:USERPROFILE\.jdm\candidates\java\current"
+    if ($isAdmin) {
+        $machineJavaHome = [Environment]::GetEnvironmentVariable("JAVA_HOME", "Machine")
+        if ($machineJavaHome -and $machineJavaHome.Replace("/", "\").TrimEnd("\") -ieq $jdmCurrentPath.TrimEnd("\")) {
+            [Environment]::SetEnvironmentVariable("JAVA_HOME", $null, "Machine")
+        }
+    }
+    else {
+        $machineJavaHome = [Environment]::GetEnvironmentVariable("JAVA_HOME", "Machine")
+        if ($machineJavaHome -and $machineJavaHome.Replace("/", "\").TrimEnd("\") -ieq $jdmCurrentPath.TrimEnd("\")) {
+            Write-Step "Machine JAVA_HOME still points to jdm. Re-run as Administrator to remove it."
+        }
+    }
     Write-Ok "Removed JAVA_HOME"
 
     Write-Step "Removing jdm files..."

@@ -196,15 +196,18 @@ function Install-WithWinget {
         if ($proc.ExitCode -eq -1978335189) {
             Write-Ok "Package is already installed and up to date"
 
-            # Find existing path from snapshot
-            $existingPaths = $before.Keys | Select-Object -First 1
-            if ($existingPaths) {
-                $tmpDir = "$env:USERPROFILE\.jdm\tmp"
-                if (-not (Test-Path $tmpDir)) {
-                    New-Item -ItemType Directory $tmpDir -Force | Out-Null
-                }
-                Set-Content "$tmpDir\last_install_path.txt" $existingPaths
+            # Only reuse the snapshot when there is one possible JDK path.
+            $existingPaths = @($before.Keys)
+            if ($existingPaths.Count -ne 1) {
+                Write-Fail "Could not uniquely identify the already-installed JDK path. Found $($existingPaths.Count) Java installations."
+                return $false
             }
+
+            $tmpDir = "$env:USERPROFILE\.jdm\tmp"
+            if (-not (Test-Path $tmpDir)) {
+                New-Item -ItemType Directory $tmpDir -Force | Out-Null
+            }
+            Set-Content "$tmpDir\last_install_path.txt" $existingPaths[0]
 
             return $true
         }
@@ -218,14 +221,14 @@ function Install-WithWinget {
     Write-Step "Detecting new installation..."
     $after = Get-JavaSnapshot
 
-    $newPaths = $after.Keys | Where-Object { -not $before.ContainsKey($_) }
+    $newPaths = @($after.Keys | Where-Object { -not $before.ContainsKey($_) })
 
-    if ($newPaths.Count -eq 0) {
-        Write-Fail "Could not detect new JDK installation. It may already be installed."
+    if ($newPaths.Count -ne 1) {
+        Write-Fail "Could not uniquely identify the new JDK installation. Found $($newPaths.Count) new Java paths."
         return $false
     }
 
-    $realPath = $newPaths | Select-Object -First 1
+    $realPath = $newPaths[0]
     Write-Ok "Detected new JDK at: $realPath"
 
     # Write real path to marker file for install.ps1 to read
