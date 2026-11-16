@@ -117,4 +117,112 @@ Describe "Winget Tests" {
             $filtered.Count | Should -Be 2
         }
     }
+
+    Describe "Install-WithWinget path detection" {
+        BeforeEach {
+            Mock Get-Command { return [PSCustomObject]@{ Name = "winget" } } -ParameterFilter { $Name -eq "winget" }
+            Mock Write-Step { }
+            Mock Write-Ok { }
+            Mock Write-Fail { }
+            Mock Test-Path { return $true }
+            Mock New-Item { }
+            Mock Set-Content { }
+        }
+
+        It "fails instead of selecting an arbitrary existing JDK path" {
+            Mock Get-JavaSnapshot { return @{ first = $true; second = $true } }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = -1978335189 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $false
+            Should -Invoke Set-Content -Times 0
+            Should -Invoke Write-Fail -Times 1 -ParameterFilter { $msg -like "*uniquely identify*already-installed*" }
+        }
+
+        It "records a single existing JDK path when winget reports it is already installed" {
+            Mock Get-JavaSnapshot { return @{ existing = $true } }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = -1978335189 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $true
+            Should -Invoke Set-Content -Times 1 -ParameterFilter {
+                $Path -like "*last_install_path.txt" -and $Value -eq "existing"
+            }
+        }
+
+        It "creates the marker directory when tracking an existing JDK" {
+            Mock Test-Path { return $false }
+            Mock Get-JavaSnapshot { return @{ existing = $true } }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = -1978335189 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $true
+            Should -Invoke New-Item -Times 1 -ParameterFilter { $Path -like "*\.jdm\tmp" }
+        }
+
+        It "reports a winget install failure" {
+            Mock Get-JavaSnapshot { return @{} }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = 1 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $false
+            Should -Invoke Write-Fail -Times 1 -ParameterFilter { $msg -like "*winget install failed*" }
+        }
+
+        It "fails when an install produces multiple new JDK paths" {
+            $script:snapshotCall = 0
+            Mock Get-JavaSnapshot {
+                $script:snapshotCall++
+                if ($script:snapshotCall -eq 1) { return @{ existing = $true } }
+                return @{ existing = $true; newOne = $true; newTwo = $true }
+            }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = 0 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $false
+            Should -Invoke Set-Content -Times 0
+            Should -Invoke Write-Fail -Times 1 -ParameterFilter { $msg -like "*uniquely identify*new JDK*" }
+        }
+
+        It "records the one new JDK path after a successful install" {
+            $script:snapshotCall = 0
+            Mock Get-JavaSnapshot {
+                $script:snapshotCall++
+                if ($script:snapshotCall -eq 1) { return @{ existing = $true } }
+                return @{ existing = $true; newPath = $true }
+            }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = 0 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $true
+            Should -Invoke Set-Content -Times 1 -ParameterFilter {
+                $Path -like "*last_install_path.txt" -and $Value -eq "newPath"
+            }
+        }
+
+        It "creates the marker directory after a successful install when missing" {
+            $script:snapshotCall = 0
+            Mock Test-Path { return $false }
+            Mock Get-JavaSnapshot {
+                $script:snapshotCall++
+                if ($script:snapshotCall -eq 1) { return @{} }
+                return @{ newPath = $true }
+            }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = 0 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $true
+            Should -Invoke New-Item -Times 1 -ParameterFilter { $Path -like "*\.jdm\tmp" }
+            Should -Invoke Set-Content -Times 1 -ParameterFilter {
+                $Path -like "*last_install_path.txt" -and $Value -eq "newPath"
+            }
+        }
+    }
 }

@@ -32,7 +32,7 @@ function Get-JdmEnvVariable {
 function Set-JdmEnvVariable {
     param(
         [Parameter(Mandatory)] [string] $Name,
-        [Parameter(Mandatory)] [string] $Value,
+        [Parameter(Mandatory)] [AllowNull()] [AllowEmptyString()] [object] $Value,
         [Parameter(Mandatory)] [System.EnvironmentVariableTarget] $Target
     )
     [Environment]::SetEnvironmentVariable($Name, $Value, $Target)
@@ -289,6 +289,51 @@ function Remove-CurrentSymlink {
     if (Test-Path $CURRENT_LINK) {
         Remove-Item $CURRENT_LINK -Force -Recurse
         Write-Ok "Removed current symlink"
+    }
+}
+
+function Remove-JdmJavaEnvironment {
+    # Remove only the environment entries managed by jdm.
+    $userJavaHome = Get-JdmEnvVariable -Name "JAVA_HOME" -Target User
+    if (Test-JdmPathEquals -LeftPath $userJavaHome -RightPath $CURRENT_LINK) {
+        Set-JdmEnvVariable -Name "JAVA_HOME" -Value $null -Target User
+    }
+    if (Test-JdmPathEquals -LeftPath $env:JAVA_HOME -RightPath $CURRENT_LINK) {
+        $env:JAVA_HOME = $null
+    }
+
+    $userPath = Get-JdmEnvVariable -Name "PATH" -Target User
+    $userEntries = @($userPath -split ";" | Where-Object {
+        $_ -and -not (Test-JdmPathEquals -LeftPath $_ -RightPath $JDM_JAVA_BIN)
+    })
+    Set-JdmEnvVariable -Name "PATH" -Value ($userEntries -join ";") -Target User
+
+    $processEntries = @($env:PATH -split ";" | Where-Object {
+        $_ -and -not (Test-JdmPathEquals -LeftPath $_ -RightPath $JDM_JAVA_BIN)
+    })
+    $env:PATH = $processEntries -join ";"
+
+    if (Get-CurrentPrincipalIsAdmin) {
+        $machineJavaHome = Get-JdmEnvVariable -Name "JAVA_HOME" -Target Machine
+        if (Test-JdmPathEquals -LeftPath $machineJavaHome -RightPath $CURRENT_LINK) {
+            Set-JdmEnvVariable -Name "JAVA_HOME" -Value $null -Target Machine
+        }
+        $machinePath = Get-JdmEnvVariable -Name "PATH" -Target Machine
+        $machineEntries = @($machinePath -split ";" | Where-Object {
+            $_ -and -not (Test-JdmPathEquals -LeftPath $_ -RightPath $JDM_JAVA_BIN)
+        })
+        Set-JdmEnvVariable -Name "PATH" -Value ($machineEntries -join ";") -Target Machine
+    }
+    else {
+        $machineJavaHome = Get-JdmEnvVariable -Name "JAVA_HOME" -Target Machine
+        $machinePath = Get-JdmEnvVariable -Name "PATH" -Target Machine
+        $machineHasJdmPath = @($machinePath -split ";" | Where-Object {
+            Test-JdmPathEquals -LeftPath $_ -RightPath $JDM_JAVA_BIN
+        }).Count -gt 0
+
+        if ((Test-JdmPathEquals -LeftPath $machineJavaHome -RightPath $CURRENT_LINK) -or $machineHasJdmPath) {
+            Write-Step "Machine Java settings still reference jdm. Re-run as Administrator to remove them."
+        }
     }
 }
 

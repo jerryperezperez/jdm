@@ -80,7 +80,7 @@ Describe "jdm Tests" {
             Invoke-SelfUninstall
 
             # Write-Host is called at the beginning (blank line), during uninstall, and at the end (multiple messages)
-            Should -Invoke Write-Host -Times 21
+            Should -Invoke Write-Host -Times 19
         }
 
         It "warns when machine PATH still contains java entries" {
@@ -90,12 +90,44 @@ Describe "jdm Tests" {
             Mock Write-Host { }
             Mock Remove-Item { }
 
-            # inject a fake machine path value via variable that our test loader patches
-            $script:TestMachinePath = "C:\\foo;jdkbar"
+            Mock Get-JdmMachinePath { return "C:\\foo;jdkbar" }
 
             Invoke-SelfUninstall
 
             Should -Invoke Write-Host -ParameterFilter { $Object -like "*Warning: Machine level PATH*" }
+            Should -Invoke Get-JdmMachinePath -Times 1
+        }
+    }
+
+    Describe "Remove-JdmMachineJavaHome" {
+        It "removes a matching machine JAVA_HOME when admin" {
+            $originalJavaHome = $env:JAVA_HOME
+            $env:JAVA_HOME = "$env:USERPROFILE\.jdm\candidates\java\current"
+
+            try {
+                Remove-JdmMachineJavaHome -IsAdmin $true -Target Process
+
+                $env:JAVA_HOME | Should -BeNullOrEmpty
+            }
+            finally {
+                $env:JAVA_HOME = $originalJavaHome
+            }
+        }
+
+        It "warns and leaves a matching JAVA_HOME when not admin" {
+            $originalJavaHome = $env:JAVA_HOME
+            $env:JAVA_HOME = "$env:USERPROFILE\.jdm\candidates\java\current"
+            Mock Write-Step { }
+
+            try {
+                Remove-JdmMachineJavaHome -IsAdmin $false -Target Process
+
+                $env:JAVA_HOME | Should -Be "$env:USERPROFILE\.jdm\candidates\java\current"
+                Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -like "*Machine JAVA_HOME*" }
+            }
+            finally {
+                $env:JAVA_HOME = $originalJavaHome
+            }
         }
     }
 

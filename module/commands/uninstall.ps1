@@ -152,6 +152,7 @@ function Invoke-Uninstall {
         if ($others.Count -eq 0) {
             # No replacement — remove symlink entirely
             Remove-CurrentSymlink
+            Remove-JdmJavaEnvironment
             Write-Host ""
             Write-Host "  [!] No active Java version set." -ForegroundColor Yellow
             Write-Host "  Run 'jdm install temurin.21' to install a new version." -ForegroundColor Cyan
@@ -314,6 +315,7 @@ function Invoke-UninstallAll {
     $remaining = @(Get-AllVersions)
     if ($remaining.Count -eq 0) {
         Remove-CurrentSymlink
+        Remove-JdmJavaEnvironment
         Write-Host ""
         Write-Host "  [!] No active Java version set." -ForegroundColor Yellow
         Write-Host "  Run 'jdm install temurin.21' to install a new version." -ForegroundColor Cyan

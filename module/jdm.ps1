@@ -14,6 +14,43 @@ function Write-Ok { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Green 
 function Write-Fail { param($msg) Write-Host "  [ERROR] $msg" -ForegroundColor Red }
 function Write-Title { param($msg) Write-Host "`n$msg" -ForegroundColor Yellow }
 
+function Get-JdmJavaHomeSetting {
+    param(
+        [Parameter(Mandatory)] [System.EnvironmentVariableTarget] $Target
+    )
+    return [Environment]::GetEnvironmentVariable("JAVA_HOME", $Target)
+}
+
+function Set-JdmJavaHomeSetting {
+    param(
+        [Parameter(Mandatory)] [AllowNull()] [AllowEmptyString()] [object] $Value,
+        [Parameter(Mandatory)] [System.EnvironmentVariableTarget] $Target
+    )
+    [Environment]::SetEnvironmentVariable("JAVA_HOME", $Value, $Target)
+}
+
+function Get-JdmMachinePath {
+    return [Environment]::GetEnvironmentVariable("PATH", "Machine")
+}
+
+function Remove-JdmMachineJavaHome {
+    param(
+        [Parameter(Mandatory)] [bool] $IsAdmin,
+        [Parameter(Mandatory)] [System.EnvironmentVariableTarget] $Target
+    )
+
+    $machineJavaHome = Get-JdmJavaHomeSetting -Target $Target
+    $jdmCurrentPath = "$env:USERPROFILE\.jdm\candidates\java\current"
+    if ($machineJavaHome -and $machineJavaHome.Replace("/", "\").TrimEnd("\") -ieq $jdmCurrentPath.TrimEnd("\")) {
+        if ($IsAdmin) {
+            Set-JdmJavaHomeSetting -Value $null -Target $Target
+        }
+        else {
+            Write-Step "Machine JAVA_HOME still points to jdm. Re-run as Administrator to remove it."
+        }
+    }
+}
+
 $jdm_VERSION = "0.2.0"
 
 function Show-Help {
@@ -82,13 +119,18 @@ function Invoke-SelfUninstall {
 
     Write-Step "Removing JAVA_HOME..."
     [Environment]::SetEnvironmentVariable("JAVA_HOME", $null, "User")
+    $env:JAVA_HOME = $null
+
+    $currentPrincipal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    $isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    Remove-JdmMachineJavaHome -IsAdmin $isAdmin -Target Machine
     Write-Ok "Removed JAVA_HOME"
 
     Write-Step "Removing jdm files..."
     Remove-Item "$env:USERPROFILE\.jdm" -Recurse -Force -ErrorAction SilentlyContinue
     Write-Ok "Removed $env:USERPROFILE\.jdm"
 
-    $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+    $machinePath = Get-JdmMachinePath
     $hasJava = $machinePath -split ";" | Where-Object { $_ -match "jdk|java|temurin|corretto|zulu|jdm" }
 
     Write-Host ""
