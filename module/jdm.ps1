@@ -101,7 +101,7 @@ function Invoke-SelfUninstall {
     Write-Host "    - JAVA_HOME (user level)" -ForegroundColor Gray
     Write-Host ""
     Write-Host "  The following will NOT be removed:" -ForegroundColor White
-    Write-Host "    - Your JDKs in $env:USERPROFILE\.jdks\" -ForegroundColor Gray
+    Write-Host "    - Your JDKs in their winget install locations (often under Program Files)" -ForegroundColor Gray
     Write-Host "    - Machine level PATH entries (requires manual Admin cleanup)" -ForegroundColor Gray
     Write-Host ""
 
@@ -145,8 +145,8 @@ function Invoke-SelfUninstall {
         Write-Host ""
     }
 
-    Write-Host "  Your JDKs are still in $env:USERPROFILE\.jdks\" -ForegroundColor Gray
-    Write-Host "  Delete that folder manually if you want to remove them too." -ForegroundColor Gray
+    Write-Host "  Your JDKs remain in their winget install locations." -ForegroundColor Gray
+    Write-Host "  Use 'jdm uninstall --all-vendors' before removing jdm if you want jdm to uninstall tracked JDKs." -ForegroundColor Gray
     Write-Host ""
     Write-Host "  Open a new terminal for changes to take effect." -ForegroundColor Cyan
     Write-Host ""
