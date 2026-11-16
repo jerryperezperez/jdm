@@ -345,4 +345,66 @@ Describe "Symlink Tests" {
             Should -Invoke Write-Ok -Times 1
         }
     }
+
+    Describe "Remove-JdmJavaEnvironment" {
+        It "removes user settings and warns about matching machine settings when not admin" {
+            $originalPath = $env:PATH
+            $env:PATH = "$JDM_JAVA_BIN;C:\Windows\System32"
+
+            Mock Get-JdmEnvVariable {
+                if ($Name -eq "JAVA_HOME" -and $Target -eq "User") { return $CURRENT_LINK }
+                if ($Name -eq "PATH" -and $Target -eq "User") { return "$JDM_JAVA_BIN;C:\UserTools" }
+                if ($Name -eq "JAVA_HOME" -and $Target -eq "Machine") { return $CURRENT_LINK }
+                if ($Name -eq "PATH" -and $Target -eq "Machine") { return "C:\MachineTools" }
+            }
+            Mock Set-JdmEnvVariable { }
+            Mock Get-CurrentPrincipalIsAdmin { return $false }
+            Mock Write-Step { }
+
+            try {
+                Remove-JdmJavaEnvironment
+
+                $env:PATH | Should -Be "C:\Windows\System32"
+                Should -Invoke Set-JdmEnvVariable -Times 1 -ParameterFilter {
+                    $Name -eq "JAVA_HOME" -and $Target -eq "User" -and $null -eq $Value
+                }
+                Should -Invoke Set-JdmEnvVariable -Times 1 -ParameterFilter {
+                    $Name -eq "PATH" -and $Target -eq "User" -and $Value -eq "C:\UserTools"
+                }
+                Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -like "*Machine Java settings*" }
+            }
+            finally {
+                $env:PATH = $originalPath
+            }
+        }
+
+        It "clears matching machine settings when admin" {
+            $originalPath = $env:PATH
+            $env:PATH = "$JDM_JAVA_BIN;C:\Windows\System32"
+
+            Mock Get-JdmEnvVariable {
+                if ($Name -eq "JAVA_HOME" -and $Target -eq "User") { return $CURRENT_LINK }
+                if ($Name -eq "PATH" -and $Target -eq "User") { return "$JDM_JAVA_BIN;C:\UserTools" }
+                if ($Name -eq "JAVA_HOME" -and $Target -eq "Machine") { return $CURRENT_LINK }
+                if ($Name -eq "PATH" -and $Target -eq "Machine") { return "$JDM_JAVA_BIN;C:\MachineTools" }
+            }
+            Mock Set-JdmEnvVariable { }
+            Mock Get-CurrentPrincipalIsAdmin { return $true }
+
+            try {
+                Remove-JdmJavaEnvironment
+
+                $env:PATH | Should -Be "C:\Windows\System32"
+                Should -Invoke Set-JdmEnvVariable -Times 1 -ParameterFilter {
+                    $Name -eq "JAVA_HOME" -and $Target -eq "Machine" -and $null -eq $Value
+                }
+                Should -Invoke Set-JdmEnvVariable -Times 1 -ParameterFilter {
+                    $Name -eq "PATH" -and $Target -eq "Machine" -and $Value -eq "C:\MachineTools"
+                }
+            }
+            finally {
+                $env:PATH = $originalPath
+            }
+        }
+    }
 }
