@@ -19,32 +19,26 @@
 | winget | No version switching — installs as a system app |
 | SDKMANforWindows | Never reached a usable state, abandoned |
 
-`jdm` fills this gap. It wraps `winget` for safe, verified downloads and manages version switching via Windows symlinks — so switching Java versions is a single command, and takes effect in every new terminal without touching system-level config again.
+`jdm` fills this gap. It wraps `winget` to install JDKs and manages version switching through a Windows link, so you can change the active version with one command.
 
 ---
 
 ## Terminal Output
 
-Starting with v0.3.0, `jdm install` streams winget's download and installation progress directly to your terminal. You'll see:
-
-- Download progress bars
-- Installation status messages
-- Error details (if any)
-
-Winget output is indented and dimmed to distinguish it from jdm's own messages.
+`jdm install` launches winget and waits for it to finish. jdm then detects the JDK's install path and records it. Winget may show its own progress in a separate process window.
 
 ---
 
 ## How It Works
 
-`jdm` installs JDKs into `~/.jdks/` and tracks them in a local `registry.json`. A symlink at `~/.jdm/candidates/java/current` always points to the active version. `JAVA_HOME` and `PATH` are configured once during setup to point at that symlink — switching versions just updates where the symlink points, so your environment variables never need to change again.
+`jdm` asks winget to install each JDK in winget's normal install location; it does not move the JDK files into a jdm folder. It records the detected install path and version key in `~/.jdm/registry.json`.
+
+The link `~/.jdm/candidates/java/current` points to the active JDK. `JAVA_HOME` and PATH are set to use that link, so switching versions changes the link target.
 
 ```
 ~/.jdm/
   candidates/
     java/
-      temurin.21/       ← installed JDK files
-      corretto.17/      ← installed JDK files
       current/          ← symlink → active version
   registry.json         ← tracks all installed versions
   module/               ← jdm PowerShell scripts
@@ -57,9 +51,11 @@ Winget output is indented and dimmed to distinguish it from jdm's own messages.
 - Windows 10 or later
 - PowerShell 5.1+ *(pre-installed on Windows 10/11)*
 - [winget](https://apps.microsoft.com/detail/9nblggh4nns1) (App Installer — available from the Microsoft Store)
-- **Administrator privileges OR Developer Mode enabled** *(required for symlink creation when switching versions)*
+- Administrator privileges or Developer Mode enable symbolic links; jdm can use a junction fallback without them.
 
-> **Note on symlinks:** Windows requires either Administrator rights or Developer Mode (`Settings -> For developers -> Developer Mode`) to create directory symlinks. The bootstrap installer can run in a normal PowerShell session, but `jdm use` and the first automatic activation of a JDK still need one of those permissions.
+> **Note on links:** jdm prefers a symbolic link when Windows permits it and falls back to a junction otherwise. This usually lets you switch versions without elevation. The bootstrap installer can run in a normal PowerShell session.
+
+By default, setup changes your user-level environment. Running setup or `jdm use` as Administrator can also change machine-level JAVA_HOME and PATH.
 
 ---
 
@@ -77,32 +73,31 @@ If you want `jdm` to also update machine-level environment variables during inst
 
 Download `jdmInstaller.exe` from the [Releases](https://github.com/jerryperezperez/jdm/releases) page and double-click. Same installer flow, wrapped for non-terminal users via `ps2exe`.
 
-If installation succeeds but switching a Java version later fails with a permission error, enable Developer Mode or rerun the affected `jdm use` command in an elevated PowerShell window.
+If switching a Java version fails while creating its link, enable Developer Mode or rerun the affected `jdm use` command in an elevated PowerShell window.
 
 ---
 
 ## Usage
 
 ```powershell
-# Install a JDK
+# Install multiple JDKs
 jdm install temurin.21
 jdm install corretto.17
-jdm install azul.21
 
-# Switch active version
-jdm use temurin.21
-jdm use corretto.17
-
-# List installed versions
+# Show versions tracked by jdm
 jdm list
 
-# Remove a version
-jdm uninstall corretto.17
+# Switch active version
+jdm use corretto.17
+java -version
 
-# Remove ALL installed JDKs (bulk, prompts for confirmation)
+# Remove a version
+jdm uninstall temurin.21
+
+# Remove every JDK tracked by jdm (prompts for confirmation)
 jdm uninstall --all-vendors
 
-# Remove jdm itself
+# Remove jdm itself; this leaves JDKs installed
 jdm uninstall --self
 
 # Show version
@@ -110,6 +105,26 @@ jdm version
 ```
 
 > **Note:** Version keys use dot format (`vendor.version`, e.g., `temurin.21`) consistently across all commands. Hyphen format (`temurin-21`) is accepted by `use` and `uninstall` for backward compatibility but is deprecated and will be removed in a future release.
+
+The first JDK you install is activated automatically. When you install another JDK, jdm asks whether to make it active. If winget returns several JDK matches, jdm asks you to choose one. `-Force` skips the prompts, selects the first match, and accepts the default install and activation choices, so use it only when you are comfortable with those choices.
+
+### Existing JDKs
+
+`jdm list` shows versions in jdm's registry; it does not inventory every JDK on the machine. There is no general-purpose import command for arbitrary JDK folders.
+
+If winget reports that the requested package is already installed, jdm reuses a detected path only when it finds exactly one Java installation in the locations it scans (Program Files, Program Files (x86), LocalAppData, and AppData). If it finds zero or multiple paths, it stops rather than guessing. Installations outside those locations may not be detected. Existing JDKs that are not registered with jdm are not included in `jdm uninstall --all-vendors`.
+
+### Removing JDKs and jdm
+
+- `jdm uninstall temurin.21` removes that tracked JDK. If it is active and other tracked versions remain, jdm asks which one to activate next.
+- `jdm uninstall --all-vendors` attempts to remove every tracked JDK; it does not remove untracked JDKs.
+- `jdm uninstall --self` removes jdm and its user settings but leaves JDKs installed. Machine-level PATH entries may need separate Administrator cleanup.
+
+If bulk uninstall reports failures, check the listed winget packages and install paths afterward. The command continues cleanup after failures, and a failed JDK may no longer appear in `jdm list`.
+
+### PATH behavior
+
+When switching versions, jdm removes existing PATH entries whose text matches Java, JDK, or supported vendor names, then puts the jdm link first. This does not delete those JDK files, but it can remove unrelated PATH entries with matching names. When run as Administrator, it also updates machine PATH. Consider saving your current PATH and using a normal PowerShell session unless you want system-wide changes.
 
 ### Example session
 
@@ -141,12 +156,12 @@ $ jdm list
   --> temurin.21  (current)
        Vendor  : temurin
        Version : 21
-       Path    : C:\Users\user\.jdm\candidates\java\temurin.21
+       Path    : C:\Program Files\Eclipse Adoptium\jdk-21...
 
        corretto.17
        Vendor  : corretto
        Version : 17
-       Path    : C:\Users\user\.jdm\candidates\java\corretto.17
+       Path    : C:\Program Files\Amazon Corretto\jdk-17...
 ```
 
 ---

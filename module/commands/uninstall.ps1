@@ -106,25 +106,8 @@ function Invoke-Uninstall {
         }
     }
 
-    # ── Step 4: Remove files from disk ───────────────────────
-    Write-Step "Removing files..."
-
-    if (Test-Path $entry.path) {
-        try {
-            Remove-Item $entry.path -Recurse -Force
-            Write-Ok "Removed $($entry.path)"
-        }
-        catch {
-            Write-Fail "Failed to remove files: $_"
-            Write-Fail "Try closing any terminals or apps using this Java version first."
-            return
-        }
-    }
-    else {
-        Write-Step "Files already missing from disk, cleaning up registry only."
-    }
-
-    # ── Step 4b: Uninstall via winget (best-effort) ───────────
+    # ── Step 4: Uninstall via winget before removing files ────
+    # The registered uninstaller may live inside the JDK directory.
     Write-Step "Uninstalling $($entry.id) via winget..."
     try {
         $wingetOk = Uninstall-WithWinget -Id $entry.id
@@ -139,7 +122,25 @@ function Invoke-Uninstall {
         Write-Step "Winget uninstall error (non-fatal): $_"
     }
 
-    # ── Step 5: Remove from registry ─────────────────────────
+    # ── Step 5: Remove any files left on disk ─────────────────
+    Write-Step "Removing remaining files..."
+
+    if (Test-Path $entry.path) {
+        try {
+            Remove-Item $entry.path -Recurse -Force
+            Write-Ok "Removed $($entry.path)"
+        }
+        catch {
+            Write-Fail "Failed to remove files: $_"
+            Write-Fail "Try closing any terminals or apps using this Java version first."
+            return
+        }
+    }
+    else {
+        Write-Step "Files already removed or missing from disk, cleaning up registry only."
+    }
+
+    # ── Step 6: Remove from registry ─────────────────────────
     $removed = Remove-Version -Key $Key
 
     if (-not $removed) {
@@ -147,7 +148,7 @@ function Invoke-Uninstall {
         return
     }
 
-    # ── Step 6: Handle symlink if we removed active version ───
+    # ── Step 7: Handle symlink if we removed active version ───
     if ($isCurrentVersion) {
         if ($others.Count -eq 0) {
             # No replacement — remove symlink entirely

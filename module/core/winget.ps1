@@ -82,7 +82,7 @@ function Get-VersionFromId {
         [Parameter(Mandatory)] [string] $Id
     )
 
-    if ($Id -match "\.(\d+)\.") {
+    if ($Id -match "\.(\d+)(?:\.|$)") {
         return $matches[1]
     }
 
