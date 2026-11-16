@@ -17,7 +17,18 @@ foreach ($package in $jacoco.report.package) {
     $packagePath = ([string]$package.name).Replace(".", "/").TrimEnd("/")
 
     foreach ($sourceFile in $package.sourcefile) {
-        $filePath = "$packagePath/$($sourceFile.name)"
+        $sourcePath = ([string]$sourceFile.name).Replace("\", "/").TrimStart("/")
+        $packageLeaf = ($packagePath -split "/")[-1]
+        if ($sourcePath.StartsWith("$packagePath/", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $filePath = $sourcePath
+        }
+        elseif ($sourcePath.StartsWith("$packageLeaf/", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $filePath = "$packagePath/$($sourcePath.Substring($packageLeaf.Length + 1))"
+        }
+        else {
+            $filePath = "$packagePath/$sourcePath"
+        }
+
         $file = $coverage.CreateElement("file")
         $file.SetAttribute("path", $filePath)
 

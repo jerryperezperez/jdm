@@ -152,6 +152,27 @@ Describe "Winget Tests" {
             }
         }
 
+        It "creates the marker directory when tracking an existing JDK" {
+            Mock Test-Path { return $false }
+            Mock Get-JavaSnapshot { return @{ existing = $true } }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = -1978335189 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $true
+            Should -Invoke New-Item -Times 1 -ParameterFilter { $Path -like "*\.jdm\tmp" }
+        }
+
+        It "reports a winget install failure" {
+            Mock Get-JavaSnapshot { return @{} }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = 1 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $false
+            Should -Invoke Write-Fail -Times 1 -ParameterFilter { $msg -like "*winget install failed*" }
+        }
+
         It "fails when an install produces multiple new JDK paths" {
             $script:snapshotCall = 0
             Mock Get-JavaSnapshot {
@@ -180,6 +201,25 @@ Describe "Winget Tests" {
             $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
 
             $result | Should -Be $true
+            Should -Invoke Set-Content -Times 1 -ParameterFilter {
+                $Path -like "*last_install_path.txt" -and $Value -eq "newPath"
+            }
+        }
+
+        It "creates the marker directory after a successful install when missing" {
+            $script:snapshotCall = 0
+            Mock Test-Path { return $false }
+            Mock Get-JavaSnapshot {
+                $script:snapshotCall++
+                if ($script:snapshotCall -eq 1) { return @{} }
+                return @{ newPath = $true }
+            }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = 0 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $true
+            Should -Invoke New-Item -Times 1 -ParameterFilter { $Path -like "*\.jdm\tmp" }
             Should -Invoke Set-Content -Times 1 -ParameterFilter {
                 $Path -like "*last_install_path.txt" -and $Value -eq "newPath"
             }
