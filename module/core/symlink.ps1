@@ -336,10 +336,3 @@ function Remove-JdmJavaEnvironment {
         }
     }
 }
-
-function Initialize-JavaEnvironment {
-    Write-Step "Configuring Java environment..."
-    Set-JavaHome
-    Repair-JavaPath
-    Write-Ok "Environment configured. Restart your terminal for changes to take effect."
-}
