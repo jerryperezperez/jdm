@@ -112,7 +112,7 @@ The first JDK you install is activated automatically. When you install another J
 
 `jdm list` shows versions in jdm's registry; it does not inventory every JDK on the machine. There is no general-purpose import command for arbitrary JDK folders.
 
-If winget reports that the requested package is already installed, jdm reuses a detected path only when it finds exactly one Java installation in the locations it scans (Program Files, Program Files (x86), LocalAppData, and AppData). If it finds zero or multiple paths, it stops rather than guessing. Installations outside those locations may not be detected. Existing JDKs that are not registered with jdm are not included in `jdm uninstall --all-vendors`.
+If winget reports that the requested package is already installed, jdm checks detected JDKs' reported vendor and major version and reuses the path only when exactly one matches the requested package. If there is no unique match, it stops rather than guessing. jdm scans Program Files, Program Files (x86), LocalAppData, and AppData; installations outside those locations may not be detected. Existing JDKs that are not registered with jdm are not included in `jdm uninstall --all-vendors`.
 
 ### Removing JDKs and jdm
 

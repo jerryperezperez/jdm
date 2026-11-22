@@ -162,6 +162,78 @@ function Get-JavaSnapshot {
     return $snapshot
 }
 
+# Read the identity reported by a JDK itself so an existing path can be
+# matched to the package winget says is already installed.
+function Get-JavaIdentity {
+    param(
+        [Parameter(Mandatory)] [string] $Path
+    )
+
+    $javaExe = Join-Path $Path "bin\java.exe"
+    if (-not (Test-Path $javaExe)) { return $null }
+
+    try {
+        $javaOutput = @(& $javaExe -XshowSettings:properties -version 2>&1)
+        if ($LASTEXITCODE -ne 0) { return $null }
+
+        $output = @($javaOutput | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                $_.Exception.Message
+            }
+            else {
+                [string] $_
+            }
+        }) -join "`n"
+    }
+    catch {
+        return $null
+    }
+
+    $vendorMatch = [regex]::Match($output, '(?m)^\s*java\.vendor\s*=\s*(.+?)\s*$')
+    $versionMatch = [regex]::Match($output, '(?m)^\s*java\.version\s*=\s*(.+?)\s*$')
+    if (-not $vendorMatch.Success -or -not $versionMatch.Success) { return $null }
+
+    $reportedVersion = $versionMatch.Groups[1].Value.Trim()
+    if ($reportedVersion -match '^1\.(\d+)\.') {
+        $majorVersion = $matches[1]
+    }
+    elseif ($reportedVersion -match '^(\d+)') {
+        $majorVersion = $matches[1]
+    }
+    else {
+        return $null
+    }
+
+    return [PSCustomObject]@{
+        Vendor       = $vendorMatch.Groups[1].Value.Trim()
+        MajorVersion = $majorVersion
+    }
+}
+
+function Test-JavaIdentityMatchesPackage {
+    param(
+        [Parameter(Mandatory)] [string] $Id,
+        [Parameter()] [AllowNull()] [PSCustomObject] $Identity
+    )
+
+    if (-not $Identity) { return $false }
+
+    $expectedVendor = Get-VendorFromId -Id $Id
+    $expectedVersion = Get-VersionFromId -Id $Id
+    if ($expectedVersion -eq "unknown") { return $false }
+
+    $vendorPattern = switch ($expectedVendor) {
+        "temurin"   { 'Eclipse Adoptium|AdoptOpenJDK' }
+        "corretto"  { 'Amazon(\.com)? Inc\.|Amazon Corretto' }
+        "azul"      { 'Azul Systems, Inc\.|Azul' }
+        "microsoft" { 'Microsoft' }
+        default     { return $false }
+    }
+
+    return ($Identity.Vendor -match $vendorPattern) -and
+           ([string]$Identity.MajorVersion -eq $expectedVersion)
+}
+
 function Install-WithWinget {
     param(
         [Parameter(Mandatory)] [string] $Id
@@ -196,10 +268,18 @@ function Install-WithWinget {
         if ($proc.ExitCode -eq -1978335189) {
             Write-Ok "Package is already installed and up to date"
 
-            # Only reuse the snapshot when there is one possible JDK path.
-            $existingPaths = @($before.Keys)
+            # Match the detected JDKs by their own reported vendor and version;
+            # never assume an unrelated or sole Java installation is this package.
+            $existingPaths = @(
+                foreach ($path in $before.Keys) {
+                    $identity = Get-JavaIdentity -Path $path
+                    if (Test-JavaIdentityMatchesPackage -Id $Id -Identity $identity) {
+                        $path
+                    }
+                }
+            )
             if ($existingPaths.Count -ne 1) {
-                Write-Fail "Could not uniquely identify the already-installed JDK path. Found $($existingPaths.Count) Java installations."
+                Write-Fail "Could not uniquely match an existing JDK path to '$Id'. Found $($existingPaths.Count) matching installations."
                 return $false
             }
 
