@@ -109,7 +109,7 @@ Describe "Uninstall Command Tests" {
 
         Should -Invoke Remove-Item -Times 0
         Should -Invoke Uninstall-WithWinget -Times 1 -ParameterFilter { $Id -eq "EclipseAdoptium.Temurin.JDK.21" }
-        Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -like "*already missing*" }
+        Should -Invoke Write-Step -Times 1 -ParameterFilter { $msg -like "*already removed or missing*" }
         Should -Invoke Remove-Version -Times 1
     }
 
