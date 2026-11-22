@@ -118,6 +118,28 @@ Describe "Winget Tests" {
         }
     }
 
+    Describe "Test-JavaIdentityMatchesPackage" {
+        It "matches Temurin by vendor and major version" {
+            $identity = [PSCustomObject]@{ Vendor = "Eclipse Adoptium"; MajorVersion = "21" }
+
+            Test-JavaIdentityMatchesPackage -Id "EclipseAdoptium.Temurin.JDK.21" -Identity $identity | Should -Be $true
+        }
+
+        It "rejects a different vendor or major version" {
+            $wrongVendor = [PSCustomObject]@{ Vendor = "Amazon.com Inc."; MajorVersion = "21" }
+            $wrongVersion = [PSCustomObject]@{ Vendor = "Eclipse Adoptium"; MajorVersion = "17" }
+
+            Test-JavaIdentityMatchesPackage -Id "EclipseAdoptium.Temurin.JDK.21" -Identity $wrongVendor | Should -Be $false
+            Test-JavaIdentityMatchesPackage -Id "EclipseAdoptium.Temurin.JDK.21" -Identity $wrongVersion | Should -Be $false
+        }
+
+        It "matches the supported non-Temurin vendors" {
+            Test-JavaIdentityMatchesPackage -Id "Amazon.Corretto.21.JDK" -Identity ([PSCustomObject]@{ Vendor = "Amazon.com Inc."; MajorVersion = "21" }) | Should -Be $true
+            Test-JavaIdentityMatchesPackage -Id "Azul.Zulu.21.JDK" -Identity ([PSCustomObject]@{ Vendor = "Azul Systems, Inc."; MajorVersion = "21" }) | Should -Be $true
+            Test-JavaIdentityMatchesPackage -Id "Microsoft.OpenJDK.21" -Identity ([PSCustomObject]@{ Vendor = "Microsoft"; MajorVersion = "21" }) | Should -Be $true
+        }
+    }
+
     Describe "Install-WithWinget path detection" {
         BeforeEach {
             Mock Get-Command { return [PSCustomObject]@{ Name = "winget" } } -ParameterFilter { $Name -eq "winget" }
@@ -129,19 +151,21 @@ Describe "Winget Tests" {
             Mock Set-Content { }
         }
 
-        It "fails instead of selecting an arbitrary existing JDK path" {
-            Mock Get-JavaSnapshot { return @{ first = $true; second = $true } }
+        It "rejects the only detected JDK when its vendor differs from the requested package" {
+            Mock Get-JavaSnapshot { return @{ unrelated = $true } }
+            Mock Get-JavaIdentity { return [PSCustomObject]@{ Vendor = "Amazon.com Inc."; MajorVersion = "21" } }
             Mock Start-Process { return [PSCustomObject]@{ ExitCode = -1978335189 } }
 
             $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
 
             $result | Should -Be $false
             Should -Invoke Set-Content -Times 0
-            Should -Invoke Write-Fail -Times 1 -ParameterFilter { $msg -like "*uniquely identify*already-installed*" }
+            Should -Invoke Write-Fail -Times 1 -ParameterFilter { $msg -like "*uniquely match*EclipseAdoptium.Temurin.JDK.21*" }
         }
 
-        It "records a single existing JDK path when winget reports it is already installed" {
+        It "records a matching existing JDK path when winget reports it is already installed" {
             Mock Get-JavaSnapshot { return @{ existing = $true } }
+            Mock Get-JavaIdentity { return [PSCustomObject]@{ Vendor = "Eclipse Adoptium"; MajorVersion = "21" } }
             Mock Start-Process { return [PSCustomObject]@{ ExitCode = -1978335189 } }
 
             $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
@@ -152,9 +176,39 @@ Describe "Winget Tests" {
             }
         }
 
+        It "selects the matching vendor and version when multiple JDKs exist" {
+            Mock Get-JavaSnapshot { return @{ temurin = $true; corretto = $true } }
+            Mock Get-JavaIdentity {
+                if ($Path -eq "temurin") {
+                    return [PSCustomObject]@{ Vendor = "Eclipse Adoptium"; MajorVersion = "21" }
+                }
+                return [PSCustomObject]@{ Vendor = "Amazon.com Inc."; MajorVersion = "21" }
+            }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = -1978335189 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $true
+            Should -Invoke Set-Content -Times 1 -ParameterFilter {
+                $Path -like "*last_install_path.txt" -and $Value -eq "temurin"
+            }
+        }
+
+        It "fails when multiple existing JDKs match the requested vendor and version" {
+            Mock Get-JavaSnapshot { return @{ temurinOne = $true; temurinTwo = $true } }
+            Mock Get-JavaIdentity { return [PSCustomObject]@{ Vendor = "Eclipse Adoptium"; MajorVersion = "21" } }
+            Mock Start-Process { return [PSCustomObject]@{ ExitCode = -1978335189 } }
+
+            $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
+
+            $result | Should -Be $false
+            Should -Invoke Set-Content -Times 0
+        }
+
         It "creates the marker directory when tracking an existing JDK" {
             Mock Test-Path { return $false }
             Mock Get-JavaSnapshot { return @{ existing = $true } }
+            Mock Get-JavaIdentity { return [PSCustomObject]@{ Vendor = "Eclipse Adoptium"; MajorVersion = "21" } }
             Mock Start-Process { return [PSCustomObject]@{ ExitCode = -1978335189 } }
 
             $result = Install-WithWinget -Id "EclipseAdoptium.Temurin.JDK.21"
